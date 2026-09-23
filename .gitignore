@@ -1,0 +1,11 @@
+# backend (Laravel)
+backend/vendor/
+backend/.env
+backend/storage/*.key
+backend/bootstrap/cache/*
+!backend/bootstrap/cache/.gitkeep
+
+# frontend tem seu próprio .gitignore (gerado pelo Vite)
+
+# geral
+.DS_Store
