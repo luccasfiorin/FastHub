@@ -1,11 +1,25 @@
 # backend (Laravel)
 backend/vendor/
-.env
+backend/node_modules/
+backend/.env
+backend/.env.backup
+backend/.env.production
 backend/storage/*.key
-backend/bootstrap/cache/*
-!backend/bootstrap/cache/.gitkeep
+backend/storage/pail
+backend/public/build/
+backend/public/hot
+backend/public/storage
+backend/.phpunit.cache/
+backend/.phpunit.result.cache
 
 # frontend tem seu próprio .gitignore (gerado pelo Vite)
+
+# IDE
+.idea
+.vscode
+.fleet
+.nova
+.zed
 
 # geral
 .DS_Store
