@@ -1,6 +1,6 @@
 # backend (Laravel)
 backend/vendor/
-backend/.env
+.env
 backend/storage/*.key
 backend/bootstrap/cache/*
 !backend/bootstrap/cache/.gitkeep
