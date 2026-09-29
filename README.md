@@ -1,26 +1,46 @@
 # FastHub
 
-Web app que resolve o problema de picking e roteirização de estoque
+Web app que resolve o problema de separação e roteirização de estoque
 proposto pela Telecontrol: mapeia o armazém, calcula a rota de coleta
-e acompanha o coletor até a conclusão do pedido — tudo pela web.
+e acompanha o coletor até a conclusão do pedido.
 
-## Stack
 
-- Backend: PHP + Laravel + MySQL (API REST)
-- Frontend: HTML/CSS + React (Vite)
+## Linguagens
+
+- PHP 8.3+: backend (Laravel)
+- JavaScript: frontend (React)
+- HTML e CSS: estrutura e estilo das telas
+- SQL: banco MySQL
+
+## Tecnologias
+
+- Backend: Laravel + MySQL 
+- Frontend: React + Vite
 - Design: Figma
-- Node: gerenciado via nvm (`.nvmrc` na raiz)
+- Node: gerenciado via nvm 
 
+## Como rodar
 
+Pré-requisitos: PHP 8.3+, Composer, MySQL e nvm. Crie o banco antes:
 
-## Setup
+`CREATE DATABASE fasthub;`
+
+Backend (terminal 1), sobe em http://localhost:8000:
 
 ```bash
-nvm use 20
+cd backend
+composer install
+cp .env.example .env    # troque DB_CONNECTION para mysql e descomente/ajuste as linhas DB_*
+php artisan key:generate
+php artisan migrate
+php artisan serve
+```
 
-# backend (precisa de PHP 8.2+ e Composer)
-cd backend && composer create-project laravel/laravel . && cp .env.example .env && php artisan key:generate && php artisan migrate
+Frontend (terminal 2), sobe em http://localhost:5173:
 
-# frontend  
-cd frontend && npm install && npm run dev
+```bash
+nvm use
+cd frontend
+npm install
+npm run dev
 ```
