@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import './Login.css'
 
-function Login() {
+function Login({ onEntrar }) {
   const [usuario, setUsuario] = useState('')
   const [senha, setSenha] = useState('')
   const [lembrar, setLembrar] = useState(false)
@@ -17,6 +17,8 @@ function Login() {
     }
 
     setErro('')
+    // Por enquanto só abre o dashboard; a autenticação real virá com a API do Laravel
+    onEntrar()
   }
 
   return (
