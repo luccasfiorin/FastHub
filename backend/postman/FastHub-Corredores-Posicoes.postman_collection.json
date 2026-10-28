@@ -1,0 +1,149 @@
+{
+  "info": {
+    "name": "FastHub - Corredores e Posições",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000/api" },
+    { "key": "token", "value": "" },
+    { "key": "aisleId", "value": "" },
+    { "key": "locationId", "value": "" },
+    { "key": "code", "value": "" }
+  ],
+  "event": [{
+    "listen": "prerequest",
+    "script": { "type": "text/javascript", "exec": ["pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });"] }
+  }],
+  "item": [
+    {
+      "name": "1. Login (gestor)",
+      "event": [
+        { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.collectionVariables.set('code', 'T' + Date.now().toString().slice(-6));"] } },
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test('login 200', () => pm.response.to.have.status(200));",
+          "pm.collectionVariables.set('token', pm.response.json().token);"
+        ] } }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/login",
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"gestor@fasthub.com\",\n  \"password\": \"password123\"\n}", "options": { "raw": { "language": "json" } } }
+      }
+    },
+    {
+      "name": "Corredores",
+      "item": [
+        {
+          "name": "Criar corredor",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 criado', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('aisleId', pm.response.json().id);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/aisles",
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"{{code}}\",\n  \"name\": \"Corredor de teste\",\n  \"description\": \"Criado pelo Postman\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Criar corredor repetido (espera 422)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('422 código repetido', () => pm.response.to.have.status(422));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/aisles",
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"{{code}}\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Listar corredores",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/aisles" }
+        },
+        {
+          "name": "Ver corredor",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/aisles/{{aisleId}}" }
+        },
+        {
+          "name": "Editar corredor",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('nome alterado', () => pm.expect(pm.response.json().name).to.eql('Corredor editado'));"
+          ] } }],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/aisles/{{aisleId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"{{code}}\",\n  \"name\": \"Corredor editado\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Posições",
+      "item": [
+        {
+          "name": "Criar posição",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 criado', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('locationId', pm.response.json().id);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/locations",
+            "body": { "mode": "raw", "raw": "{\n  \"aisle_id\": {{aisleId}},\n  \"shelf\": \"1\",\n  \"position\": \"01\",\n  \"coord_x\": 10,\n  \"coord_y\": 5,\n  \"coord_z\": 0\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Criar posição repetida (espera 422)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('422 posição repetida', () => pm.response.to.have.status(422));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/locations",
+            "body": { "mode": "raw", "raw": "{\n  \"aisle_id\": {{aisleId}},\n  \"shelf\": \"1\",\n  \"position\": \"01\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Listar posições do corredor",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('1 posição', () => pm.expect(pm.response.json().length).to.eql(1));"
+          ] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/locations?aisle_id={{aisleId}}" }
+        },
+        {
+          "name": "Editar posição",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/locations/{{locationId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"position\": \"02\",\n  \"coord_z\": 1.5\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Excluir corredor com posição (espera 409)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('409 bloqueado', () => pm.response.to.have.status(409));"] } }],
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/aisles/{{aisleId}}" }
+        },
+        {
+          "name": "Excluir posição",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }],
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/locations/{{locationId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Excluir corredor",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }],
+      "request": { "method": "DELETE", "url": "{{baseUrl}}/aisles/{{aisleId}}" }
+    }
+  ]
+}

@@ -13,6 +13,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // API sem tela de login: visitante sem token recebe 401 em JSON em vez de erro 500.
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/');
+
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
         ]);
