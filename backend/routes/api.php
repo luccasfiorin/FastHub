@@ -3,6 +3,7 @@
 use App\Http\Controllers\AisleController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\PickerController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -27,11 +28,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::apiResource('aisles', AisleController::class)->except(['index', 'show']);
         Route::apiResource('locations', LocationController::class)->except(['index', 'show']);
+
+        // Coletores e indicadores do painel (só o gestor).
+        Route::get('/pickers/ranking', [PickerController::class, 'ranking']);
+        Route::apiResource('pickers', PickerController::class)->except(['show']);
     });
 
     Route::middleware('role:picker')->group(function () {
         Route::get('/picker/tasks', function () {
             return response()->json(['message' => 'Tarefas do Coletor autorizadas com sucesso!']);
         });
+
+        Route::post('/picker/status', [PickerController::class, 'updateOwnStatus']);
     });
 });
