@@ -14,7 +14,7 @@ return new class extends Migration
         });
 
         Schema::table('order_items', function (Blueprint $table) {
-            $table->timestamp('picked_at')->nullable()->after('is_picked');
+            $table->timestamp('picked_at')->nullable();
         });
     }
 
