@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import Icone from '../../components/Icone'
+import Sidebar from '../../components/Sidebar'
 import MapaArmazem from './MapaArmazem'
 import GraficoPedidos from './GraficoPedidos'
 import {
-  menu,
   indicadores,
   pedidos,
   nomesStatus,
@@ -30,7 +30,7 @@ function dataDeHoje() {
   return `${texto.charAt(0).toUpperCase()}${texto.slice(1)} · ${turno}`
 }
 
-function Dashboard({ onSair }) {
+function Dashboard({ onNavegar, onSair }) {
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState('todos')
   const [selecionado, setSelecionado] = useState('#4822')
@@ -54,43 +54,7 @@ function Dashboard({ onSair }) {
 
   return (
     <div className="dashboard">
-      <aside className="dash-sidebar">
-        <span className="dash-logo">FastHub</span>
-        <small className="dash-logo-sub">by Telecontrol</small>
-
-        <nav className="dash-menu">
-          {menu.map((item) => (
-            <a
-              key={item.id}
-              href="#"
-              className={`dash-menu-item ${item.id === 'inicio' ? 'ativo' : ''}`}
-            >
-              <Icone nome={item.id} className="dash-menu-icone" />
-              {item.nome}
-              {item.contador && <span className="dash-menu-contador">{item.contador}</span>}
-            </a>
-          ))}
-        </nav>
-
-        <div className="dash-erp">
-          <span className="dash-erp-ponto" />
-          <div>
-            <strong>ERP conectado</strong>
-            <small>Última sincronização há 4 min</small>
-          </div>
-        </div>
-
-        <div className="dash-sidebar-rodape">
-          <a href="#">
-            <Icone nome="configuracoes" tamanho={16} />
-            Configurações
-          </a>
-          <button type="button" onClick={onSair}>
-            <Icone nome="sair" tamanho={16} />
-            Sair
-          </button>
-        </div>
-      </aside>
+      <Sidebar ativo="inicio" onNavegar={onNavegar} onSair={onSair} />
 
       <div className="dash-principal">
         <header className="dash-topo">

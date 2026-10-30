@@ -124,6 +124,27 @@ const desenhos = {
       <path d="m5 12 5 5 9-10" />
     </>
   ),
+  sino: (
+    <>
+      <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7.5 2 7.5H4S6 15 6 9z" />
+      <path d="M10 20a2 2 0 0 0 4 0" />
+    </>
+  ),
+  mais: (
+    <>
+      <path d="M12 5v14M5 12h14" />
+    </>
+  ),
+  opcoes: (
+    <>
+      <path d="M12 6h.01M12 12h.01M12 18h.01" />
+    </>
+  ),
+  fechar: (
+    <>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </>
+  ),
   empilhadeira: (
     <>
       <path d="M3 18V9h7l3 5v4" />

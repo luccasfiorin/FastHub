@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { entrar, sair } from '../../services/api'
 import './Login.css'
 
 function Login({ onEntrar }) {
@@ -7,8 +8,9 @@ function Login({ onEntrar }) {
   const [lembrar, setLembrar] = useState(false)
   const [mostrarSenha, setMostrarSenha] = useState(false)
   const [erro, setErro] = useState('')
+  const [enviando, setEnviando] = useState(false)
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
 
     if (!usuario.trim() || !senha) {
@@ -17,8 +19,21 @@ function Login({ onEntrar }) {
     }
 
     setErro('')
-    // Por enquanto só abre o dashboard; a autenticação real virá com a API do Laravel
-    onEntrar()
+    setEnviando(true)
+
+    try {
+      const logado = await entrar(usuario.trim(), senha)
+      if (logado.role !== 'manager') {
+        await sair()
+        setErro('Este painel é exclusivo do perfil gestor.')
+        return
+      }
+      onEntrar(logado)
+    } catch (err) {
+      setErro(err.erros?.email?.[0] ?? err.message)
+    } finally {
+      setEnviando(false)
+    }
   }
 
   return (
@@ -101,8 +116,8 @@ function Login({ onEntrar }) {
 
             {erro && <p className="login-erro">{erro}</p>}
 
-            <button type="submit" className="btn btn-entrar">
-              Entrar
+            <button type="submit" className="btn btn-entrar" disabled={enviando}>
+              {enviando ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
 
