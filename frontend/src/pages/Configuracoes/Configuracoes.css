@@ -1,0 +1,630 @@
+.cfg-grade {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-top: 18px;
+}
+
+/* Menu das seções */
+
+.cfg-nav {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+}
+
+.cfg-nav button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font-size: 14px;
+  color: #3c424f;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cfg-nav button .icone {
+  flex-shrink: 0;
+  color: #686b77;
+}
+
+.cfg-nav button:hover {
+  background: #f4f5fa;
+}
+
+.cfg-nav button.ativo {
+  background: #eceefa;
+  color: #3e4494;
+}
+
+.cfg-nav button.ativo .icone {
+  color: #3e4494;
+}
+
+.cfg-nav button.em-breve {
+  cursor: default;
+}
+
+.cfg-nav button.em-breve:hover {
+  background: none;
+}
+
+/* Seções */
+
+.cfg-secoes {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.cfg-secao {
+  padding: 22px 24px 26px;
+  scroll-margin-top: 16px;
+}
+
+.cfg-secao h2 {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  font-size: 16px;
+  color: #22253f;
+}
+
+.cfg-secao > p,
+.cfg-secao-topo p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #686b77;
+}
+
+.cfg-secao-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cfg-campos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.cfg-largo {
+  grid-column: span 2;
+}
+
+.cfg-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: #3c424f;
+}
+
+.cfg-entrada {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.cfg-entrada input,
+.cfg-entrada select {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d8dbe6;
+  border-radius: 6px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  color: #22253f;
+  transition: border-color 0.2s;
+}
+
+.cfg-entrada small {
+  position: absolute;
+  right: 12px;
+  font-size: 13px;
+  color: #9a9daa;
+  pointer-events: none;
+}
+
+.cfg-entrada input:focus,
+.cfg-entrada select:focus {
+  border-color: #49509b;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(73, 80, 155, 0.12);
+}
+
+.cfg-campo.com-erro input {
+  border-color: #e5484d;
+}
+
+.cfg-campo em {
+  font-style: normal;
+  color: #c62828;
+}
+
+/* Algoritmo */
+
+.cfg-algoritmo {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 16px 18px;
+  align-items: start;
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #e6e8f0;
+  border-radius: 8px;
+  background: #f7f8fc;
+}
+
+.cfg-algoritmo-icone {
+  display: grid;
+  place-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #323664;
+  color: #ffe100;
+}
+
+.cfg-algoritmo-texto strong {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 400;
+  color: #22253f;
+}
+
+.cfg-algoritmo-texto strong span {
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: #eceefa;
+  font-size: 11px;
+  color: #49509b;
+}
+
+.cfg-algoritmo-texto p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #686b77;
+}
+
+.cfg-passos {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: passo;
+  font-size: 12px;
+  color: #3c424f;
+}
+
+.cfg-passos li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  counter-increment: passo;
+  white-space: nowrap;
+}
+
+.cfg-passos li::before {
+  content: counter(passo);
+  display: grid;
+  place-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #eceefa;
+  font-size: 11px;
+  color: #49509b;
+}
+
+/* Chave liga/desliga */
+
+.cfg-chave-linha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+}
+
+.cfg-chave {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: #c9cbe0;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cfg-chave span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+}
+
+.cfg-chave.ligada {
+  background: #323664;
+}
+
+.cfg-chave.ligada span {
+  transform: translateX(18px);
+}
+
+.cfg-chave:focus-visible {
+  outline: 2px solid #49509b;
+  outline-offset: 2px;
+}
+
+.cfg-chave-linha small {
+  font-size: 12px;
+  color: #686b77;
+}
+
+/* Botões */
+
+.cfg-btn-principal,
+.cfg-btn-secundario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 22px;
+  border: 1px solid #e1e3ec;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+  color: #22253f;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    opacity 0.2s;
+}
+
+.cfg-btn-secundario:hover {
+  background: #f4f5fa;
+}
+
+.cfg-btn-principal {
+  border-color: #323664;
+  background: #323664;
+  color: #fff;
+}
+
+.cfg-btn-principal:hover {
+  background: #2a2d55;
+}
+
+.cfg-btn-principal:disabled,
+.cfg-btn-secundario:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cfg-btn-principal:disabled:hover {
+  background: #323664;
+}
+
+.cfg-btn-secundario:disabled:hover {
+  background: #fff;
+}
+
+/* Usuários e perfis */
+
+.cfg-usuarios {
+  padding: 18px 0 8px;
+}
+
+.cfg-usuarios .cfg-secao-topo {
+  align-items: center;
+  padding: 0 24px;
+}
+
+.cfg-convite {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 200px auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 16px;
+  padding: 16px 24px;
+  border-top: 1px solid #eef0f5;
+  background: #f7f8fb;
+}
+
+.cfg-convite label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #3c424f;
+}
+
+.cfg-convite input,
+.cfg-convite select {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #d8dbe6;
+  border-radius: 6px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  color: #22253f;
+}
+
+.cfg-convite input:focus,
+.cfg-convite select:focus {
+  border-color: #49509b;
+  outline: none;
+}
+
+.cfg-convite-acoes {
+  display: flex;
+  gap: 8px;
+}
+
+.cfg-erro {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  color: #c62828;
+}
+
+.cfg-tabela-area {
+  position: relative;
+  margin-top: 16px;
+  overflow-x: auto;
+}
+
+.cfg-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: #22253f;
+}
+
+.cfg-tabela th {
+  height: 38px;
+  padding: 0 10px;
+  background: #f7f8fb;
+  font-size: 11px;
+  font-weight: 400;
+  color: #9a9daa;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.cfg-tabela td {
+  height: 50px;
+  padding: 0 10px;
+  border-bottom: 1px solid #eef0f5;
+  white-space: nowrap;
+}
+
+.cfg-tabela th:first-child,
+.cfg-tabela td:first-child {
+  padding-left: 24px;
+}
+
+.cfg-tabela th:last-child,
+.cfg-tabela td:last-child {
+  width: 56px;
+  padding-right: 20px;
+}
+
+.cfg-tabela tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.cfg-cinza {
+  color: #686b77;
+}
+
+.cfg-pessoa {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cfg-avatar {
+  display: grid;
+  place-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #49509b;
+  font-size: 10px;
+  color: #fff;
+}
+
+.cfg-avatar.gestor {
+  background: #22253f;
+}
+
+.cfg-perfil {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #eef0f5;
+  font-size: 12px;
+  color: #686b77;
+}
+
+.cfg-perfil.gestor {
+  background: #eceefa;
+  color: #49509b;
+}
+
+.cfg-menu-area {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cfg-menu-botao {
+  display: grid;
+  place-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #9a9daa;
+  cursor: pointer;
+}
+
+.cfg-menu-botao:hover,
+.cfg-menu-botao[aria-expanded='true'] {
+  background: #f4f5fa;
+  color: #22253f;
+}
+
+.cfg-menu-botao .icone {
+  transform: rotate(90deg);
+}
+
+.cfg-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  min-width: 220px;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid #e6e8f0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(34, 37, 63, 0.12);
+  list-style: none;
+}
+
+.cfg-menu button {
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font-size: 13px;
+  color: #22253f;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cfg-menu button:hover {
+  background: #f4f5fa;
+}
+
+.cfg-menu button.perigo {
+  color: #c62828;
+}
+
+.cfg-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Rodapé com salvar */
+
+.cfg-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cfg-rodape .cfg-btn-principal,
+.cfg-rodape .cfg-btn-secundario {
+  height: 40px;
+}
+
+.cfg-aviso {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  font-size: 13px;
+}
+
+.cfg-aviso.ok {
+  color: #1e8a4c;
+}
+
+.cfg-aviso.erro {
+  color: #c62828;
+}
+
+@media (max-width: 1200px) {
+  .cfg-campos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cfg-algoritmo {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .cfg-passos {
+    grid-column: 2;
+  }
+
+  .cfg-convite {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .cfg-grade {
+    grid-template-columns: 1fr;
+  }
+
+  .cfg-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .cfg-campos,
+  .cfg-convite {
+    grid-template-columns: 1fr;
+  }
+
+  .cfg-largo {
+    grid-column: auto;
+  }
+}
