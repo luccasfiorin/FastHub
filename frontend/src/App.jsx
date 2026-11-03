@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Login from './pages/Login/Login'
 import Dashboard from './pages/Dashboard/Dashboard'
 import Coletores from './pages/Coletores/Coletores'
+import Pedidos from './pages/Pedidos/Pedidos'
 import { buscarUsuario, lerToken, sair } from './services/api'
 
 function App() {
@@ -35,6 +36,10 @@ function App() {
 
   if (!usuario) {
     return <Login onEntrar={setUsuario} />
+  }
+
+  if (pagina === 'pedidos') {
+    return <Pedidos usuario={usuario} onNavegar={setPagina} onSair={sairDoSistema} />
   }
 
   if (pagina === 'coletores') {

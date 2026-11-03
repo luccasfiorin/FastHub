@@ -1,0 +1,549 @@
+/* Página Pedidos. Sidebar, topo e cartões vêm do Dashboard.css; filtros e avisos do Coletores.css. */
+@import '../Coletores/Coletores.css';
+
+.dash-status.neutro {
+  background: #eef0f5;
+  color: #686b77;
+}
+
+.ped-barra-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.ped-filtros button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ped-filtros button.perigo:not(.ativo) {
+  border-color: #f5c9c9;
+  color: #c62828;
+}
+
+.ped-filtros button span {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.ped-grade {
+  display: grid;
+  grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.1fr);
+  gap: 16px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+/* Lista */
+
+.ped-lista {
+  overflow: hidden;
+}
+
+.ped-lista ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ped-lista li + li {
+  border-top: 1px solid #e6e8f0;
+}
+
+.ped-linha {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 20px;
+  border: 0;
+  background: #fff;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ped-linha:hover {
+  background: #f8f9fc;
+}
+
+.ped-linha:focus-visible {
+  outline: 2px solid #49509b;
+  outline-offset: -2px;
+}
+
+.ped-linha.ativo {
+  background: #f8f9ff;
+}
+
+.ped-linha.ativo::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #ffe100;
+}
+
+.ped-linha-topo,
+.ped-linha-base {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ped-linha-topo strong {
+  font-size: 15px;
+  color: #22253f;
+}
+
+.ped-cliente {
+  overflow: hidden;
+  font-size: 13px;
+  color: #686b77;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ped-empilhadeira {
+  display: inline-flex;
+  color: #49509b;
+}
+
+.ped-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.ped-linha-base {
+  justify-content: space-between;
+  font-size: 12px;
+  color: #3c424f;
+}
+
+.ped-linha-base .dash-progresso {
+  width: 140px;
+}
+
+.ped-sem-coletor {
+  color: #9a9daa;
+}
+
+.ped-acao {
+  font-weight: 500;
+  color: #49509b;
+}
+
+/* Painel da rota */
+
+.ped-painel {
+  padding: 22px 24px 20px;
+}
+
+.ped-painel-vazio {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 420px;
+  color: #9a9daa;
+}
+
+.ped-painel-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ped-painel-titulo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ped-painel-titulo h2 {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  font-size: 20px;
+  color: #22253f;
+}
+
+.ped-painel-titulo .ped-status {
+  margin-left: 0;
+}
+
+.ped-painel-topo p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #686b77;
+}
+
+.ped-btn-secundario {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid #e1e3ec;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  color: #22253f;
+  cursor: pointer;
+}
+
+.ped-numeros {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 20px 0 14px;
+}
+
+.ped-numeros div {
+  min-width: 0;
+}
+
+.ped-numeros dt {
+  font-size: 12px;
+  color: #686b77;
+}
+
+.ped-numeros dd {
+  margin: 4px 0 0;
+  overflow: hidden;
+  font-family: 'Poppins', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #22253f;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ped-progresso {
+  height: 6px;
+  border-radius: 3px;
+  background: #eef0f5;
+  overflow: hidden;
+}
+
+.ped-progresso span {
+  display: block;
+  height: 100%;
+  background: #ffe100;
+}
+
+.ped-progresso.concluido span {
+  background: #1e8a4c;
+}
+
+.ped-progresso.aguardando span {
+  background: #e5484d;
+}
+
+/* Mapa */
+
+.ped-mapa-card {
+  margin-top: 18px;
+  padding: 16px 18px 14px;
+  border-radius: 10px;
+  background: #323664;
+  color: #fff;
+}
+
+.ped-mapa-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.ped-ao-vivo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 11px;
+  color: #e4e6ff;
+}
+
+.ped-ao-vivo::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+}
+
+.ped-mapa-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 10px;
+}
+
+.ped-estante {
+  fill: rgba(255, 255, 255, 0.12);
+}
+
+.ped-doca {
+  fill: rgba(255, 255, 255, 0.35);
+}
+
+.ped-mapa-letra {
+  fill: #c9cdff;
+  font-size: 13px;
+  text-anchor: middle;
+}
+
+.ped-mapa-letra.pequena {
+  font-size: 11px;
+}
+
+.ped-caminho {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ped-caminho.feito {
+  stroke: #ffe100;
+  stroke-width: 4;
+}
+
+.ped-caminho.falta {
+  stroke: #c9cdff;
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+  opacity: 0.8;
+}
+
+.ped-parada text {
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.ped-parada.feita circle {
+  fill: #ffe100;
+}
+
+.ped-parada.feita text {
+  fill: #22253f;
+}
+
+.ped-parada.falta circle {
+  fill: #323664;
+  stroke: #c9cdff;
+  stroke-width: 1.5;
+}
+
+.ped-parada.falta text {
+  fill: #e4e6ff;
+}
+
+.ped-parada.proxima circle {
+  fill: #fff;
+}
+
+.ped-parada.proxima .ped-parada-halo {
+  fill: rgba(255, 255, 255, 0.2);
+  animation: ped-pulso 1.6s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.ped-parada.proxima text {
+  fill: #22253f;
+}
+
+@keyframes ped-pulso {
+  from {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ped-parada.proxima .ped-parada-halo {
+    animation: none;
+  }
+}
+
+.ped-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.ped-legenda li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ped-legenda-ponto {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.ped-legenda-ponto.feita {
+  background: #ffe100;
+}
+
+.ped-legenda-ponto.proxima {
+  background: #fff;
+}
+
+.ped-legenda-ponto.falta {
+  border: 1.5px solid #c9cdff;
+}
+
+/* Paradas */
+
+.ped-paradas-topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.ped-paradas-topo h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #22253f;
+}
+
+.ped-paradas-topo span {
+  font-size: 12px;
+  color: #686b77;
+}
+
+.ped-paradas {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ped-paradas li {
+  display: grid;
+  grid-template-columns: 24px 56px minmax(0, 1fr) 48px 84px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-bottom: 1px solid #e6e8f0;
+  font-size: 14px;
+}
+
+.ped-paradas li.proxima {
+  border-radius: 6px;
+  background: #fffbe0;
+}
+
+.ped-paradas .dash-status {
+  justify-self: end;
+  font-size: 11px;
+}
+
+.ped-numero {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid #c9cdff;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  color: #49509b;
+}
+
+.ped-numero.feita {
+  border-color: #1e8a4c;
+  background: #1e8a4c;
+  color: #fff;
+}
+
+.ped-numero.proxima {
+  border-color: #22253f;
+  background: #22253f;
+  color: #fff;
+}
+
+.ped-posicao {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef0f5;
+  font-size: 12px;
+  font-weight: 500;
+  color: #3c424f;
+}
+
+.ped-produto {
+  overflow: hidden;
+  color: #22253f;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ped-qtd {
+  font-size: 13px;
+  color: #686b77;
+}
+
+.ped-ver-todas {
+  margin-top: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: #49509b;
+  cursor: pointer;
+}
+
+/* Telas menores: a rota vai para baixo da lista */
+
+@media (max-width: 1100px) {
+  .ped-grade {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .ped-numeros {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ped-paradas li {
+    grid-template-columns: 24px 52px minmax(0, 1fr) 72px;
+  }
+
+  .ped-qtd {
+    display: none;
+  }
+}

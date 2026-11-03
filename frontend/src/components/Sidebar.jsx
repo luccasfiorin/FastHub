@@ -9,8 +9,8 @@ const menu = [
   { id: 'relatorios', nome: 'Relatórios' },
 ]
 
-// Só Início e Coletores têm tela; os outros itens ficam sem ação até existirem.
-const comTela = ['inicio', 'coletores']
+// Só Início, Pedidos e Coletores têm tela; os outros itens ficam sem ação até existirem.
+const comTela = ['inicio', 'pedidos', 'coletores']
 
 function Sidebar({ ativo, pedidosAbertos, onNavegar, onSair }) {
   return (
