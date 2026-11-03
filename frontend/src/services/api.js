@@ -108,3 +108,11 @@ export function editarColetor(id, corpo) {
 export function excluirColetor(id) {
   return requisicao(`/pickers/${id}`, 'DELETE')
 }
+
+export function listarPedidos() {
+  return requisicao('/orders')
+}
+
+export function listarPosicoes() {
+  return requisicao('/locations')
+}
