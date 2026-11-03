@@ -145,6 +145,18 @@ const desenhos = {
       <path d="M6 6l12 12M18 6 6 18" />
     </>
   ),
+  camadas: (
+    <>
+      <path d="M12 3 2 8l10 5 10-5z" />
+      <path d="m2 13 10 5 10-5" />
+    </>
+  ),
+  editar: (
+    <>
+      <path d="M4 20h4L19 9l-4-4L4 16z" />
+      <path d="m13.5 6.5 4 4" />
+    </>
+  ),
   empilhadeira: (
     <>
       <path d="M3 18V9h7l3 5v4" />
