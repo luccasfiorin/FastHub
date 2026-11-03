@@ -9,6 +9,22 @@ use Illuminate\Support\Str;
 
 class OrderController extends Controller
 {
+    /**
+     * Lista os pedidos com itens, produto, posição (com corredor) e coletor.
+     * has_mismatch = o pedido tem alguma bipagem com divergência.
+     */
+    public function index(Request $request)
+    {
+        $orders = Order::query()
+            ->with(['picker:id,name', 'items.product:id,name,sku', 'items.location.aisle:id,code,name'])
+            ->withExists(['scanEvents as has_mismatch' => fn ($q) => $q->where('type', 'mismatch')])
+            ->when($request->query('status'), fn ($q, $status) => $q->where('status', $status))
+            ->latest('id')
+            ->get();
+
+        return response()->json($orders);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([

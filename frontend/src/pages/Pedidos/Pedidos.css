@@ -389,6 +389,12 @@
   }
 }
 
+.ped-mapa-vazio {
+  margin: 16px 0 4px;
+  font-size: 13px;
+  color: #c9cdff;
+}
+
 .ped-legenda {
   display: flex;
   flex-wrap: wrap;
@@ -451,7 +457,7 @@
 
 .ped-paradas li {
   display: grid;
-  grid-template-columns: 24px 56px minmax(0, 1fr) 48px 84px;
+  grid-template-columns: 24px auto minmax(0, 1fr) 48px 84px;
   align-items: center;
   gap: 12px;
   padding: 10px 8px;
@@ -540,7 +546,7 @@
   }
 
   .ped-paradas li {
-    grid-template-columns: 24px 52px minmax(0, 1fr) 72px;
+    grid-template-columns: 24px auto minmax(0, 1fr) 72px;
   }
 
   .ped-qtd {
