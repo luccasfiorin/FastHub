@@ -3,13 +3,10 @@ import Sidebar from '../../components/Sidebar'
 import Header from '../../components/Header'
 import Icone from '../../components/Icone'
 import MapaRota from './MapaRota'
-import { pedidosExemplo } from './dadosPedidos'
-import { calcularRota, distancia, DOCA, lerCodigoPosicao } from '../../utils/rota'
+import { usePedidos } from '../../hooks/usePedidos'
+import { calcularRota, distancia, DOCA } from '../../utils/rota'
 import { formatarHora } from '../../utils/formatar'
 import './Pedidos.css'
-
-// Por enquanto a tela usa dados de exemplo (dadosPedidos.js).
-// Quando a API tiver GET /api/orders, trocar `pedidosExemplo` pela resposta.
 
 const filtros = [
   { id: 'todos', nome: 'Todos' },
@@ -20,15 +17,29 @@ const filtros = [
   { id: 'empilhadeira', nome: 'Empilhadeira', icone: 'empilhadeira' },
 ]
 
+// Ordem da lista: primeiro o que está em andamento, depois o que espera, por último o que acabou.
+const ordemStatus = { in_progress: 0, pending: 1, completed: 2, cancelled: 3 }
+
 const PARADAS_VISIVEIS = 6
 
+// "A" + prateleira "1" + posição "3" vira "A-1-3"
 function codigoPosicao(location) {
-  return `${location.aisle.code}-${String(location.position).padStart(2, '0')}`
+  if (!location) return '—'
+  return [location.aisle?.code, location.shelf, location.position].filter(Boolean).join('-')
+}
+
+function pontoDaPosicao(location) {
+  return { x: Number(location?.coord_x ?? 0), y: Number(location?.coord_y ?? 0) }
+}
+
+// Números puros ganham "#" na frente (#4822); códigos como ORD-AB12CD ficam como estão.
+function numeroPedido(pedido) {
+  return /^\d+$/.test(pedido.order_number) ? `#${pedido.order_number}` : pedido.order_number
 }
 
 function contarItens(pedido) {
   const total = pedido.items.reduce((soma, i) => soma + i.quantity, 0)
-  const coletados = pedido.items.reduce((soma, i) => soma + i.picked_quantity, 0)
+  const coletados = pedido.items.reduce((soma, i) => soma + Math.min(i.picked_quantity, i.quantity), 0)
   return { total, coletados, percentual: total ? Math.round((coletados / total) * 100) : 0 }
 }
 
@@ -64,18 +75,15 @@ function passaNoFiltro(pedido, filtro) {
 
 // Monta as paradas do pedido e calcula a rota pelo vizinho mais próximo.
 function montarRota(pedido) {
-  const paradas = pedido.items.map((item, i) => {
-    const codigo = codigoPosicao(item.location)
-    return {
-      id: `${pedido.id}-${i}`,
-      codigo,
-      produto: item.product.name,
-      quantidade: item.quantity,
-      coletada: item.is_picked,
-      coletadaEm: item.picked_at,
-      ponto: lerCodigoPosicao(codigo),
-    }
-  })
+  const paradas = pedido.items.map((item) => ({
+    id: item.id,
+    codigo: codigoPosicao(item.location),
+    produto: item.product?.name ?? 'Produto sem nome',
+    quantidade: item.quantity,
+    coletada: item.is_picked,
+    coletadaEm: item.picked_at,
+    ponto: pontoDaPosicao(item.location),
+  }))
 
   const rota = calcularRota(paradas)
   const feitas = rota.paradas.filter((p) => p.coletada).length
@@ -97,11 +105,27 @@ function montarRota(pedido) {
 }
 
 function Pedidos({ usuario, onNavegar, onSair }) {
-  const pedidos = pedidosExemplo
+  const { pedidos: recebidos, posicoes: posicoesApi, carregando, erro, recarregar } = usePedidos()
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState('todos')
-  const [selecionadoId, setSelecionadoId] = useState(4822)
+  const [selecionadoId, setSelecionadoId] = useState(null)
   const [verTodasParadas, setVerTodasParadas] = useState(false)
+
+  const pedidos = useMemo(
+    () => [...recebidos].sort((a, b) => (ordemStatus[a.status] ?? 9) - (ordemStatus[b.status] ?? 9) || b.id - a.id),
+    [recebidos],
+  )
+
+  const posicoes = useMemo(
+    () =>
+      posicoesApi.map((location) => ({
+        id: location.id,
+        codigo: codigoPosicao(location),
+        corredor: location.aisle?.code ?? '',
+        ponto: pontoDaPosicao(location),
+      })),
+    [posicoesApi],
+  )
 
   const contagem = useMemo(() => {
     const resultado = {}
@@ -111,19 +135,18 @@ function Pedidos({ usuario, onNavegar, onSair }) {
     return resultado
   }, [pedidos])
 
-  const termo = busca.trim().toLowerCase()
+  const termo = busca.trim().toLowerCase().replace('#', '')
   const visiveis = pedidos.filter(
     (p) =>
       passaNoFiltro(p, filtro) &&
-      (!termo ||
-        p.order_number.includes(termo.replace('#', '')) ||
-        p.customer_name.toLowerCase().includes(termo) ||
-        p.picker?.name.toLowerCase().includes(termo)),
+      (!termo || p.order_number.toLowerCase().includes(termo) || p.picker?.name.toLowerCase().includes(termo)),
   )
 
-  const selecionado = pedidos.find((p) => p.id === selecionadoId) ?? null
+  // Mostra o pedido escolhido se ele estiver na lista filtrada; se não, o primeiro da lista
+  // (que é um em andamento, se houver).
+  const selecionado = visiveis.find((p) => p.id === selecionadoId) ?? visiveis[0] ?? null
   const rota = useMemo(() => (selecionado ? montarRota(selecionado) : null), [selecionado])
-  const abertos = pedidos.filter((p) => p.status !== 'completed' && p.status !== 'cancelled').length
+  const abertos = pedidos.filter((p) => p.status === 'pending' || p.status === 'in_progress').length
   const emAndamento = pedidos.filter((p) => p.status === 'in_progress').length
 
   function selecionar(pedido) {
@@ -138,16 +161,21 @@ function Pedidos({ usuario, onNavegar, onSair }) {
       <div className="dash-principal">
         <Header
           titulo="Pedidos"
-          subtitulo={`${pedidos.length} pedidos hoje · ${emAndamento} em andamento`}
+          subtitulo={`${pedidos.length} pedidos · ${emAndamento} em andamento`}
           usuario={usuario}
           busca={busca}
           onBusca={setBusca}
         />
 
         <main className="dash-conteudo">
-          <div className="col-aviso demo">
-            Prévia com dados de exemplo. A lista vai usar a API quando existir a rota de listagem de pedidos.
-          </div>
+          {erro && (
+            <div className="col-aviso erro" role="alert">
+              {erro}
+              <button type="button" onClick={recarregar}>
+                Tentar de novo
+              </button>
+            </div>
+          )}
 
           <div className="ped-barra-topo">
             <div className="col-filtros ped-filtros" role="tablist">
@@ -171,84 +199,98 @@ function Pedidos({ usuario, onNavegar, onSair }) {
             </button>
           </div>
 
-          <div className="ped-grade">
-            <section className="dash-card ped-lista" aria-label="Lista de pedidos">
-              {visiveis.length === 0 && <p className="dash-vazio">Nenhum pedido encontrado para esse filtro ou busca.</p>}
+          {carregando && <p className="col-aviso">Carregando pedidos...</p>}
 
-              <ul>
-                {visiveis.map((pedido) => {
-                  const status = situacao(pedido)
-                  const itens = contarItens(pedido)
-                  const ativo = pedido.id === selecionadoId
-                  const semColetor = !pedido.picker && pedido.status === 'pending'
+          {!carregando && !erro && pedidos.length === 0 && (
+            <div className="col-vazio">
+              <strong>Nenhum pedido cadastrado</strong>
+              <p>Os pedidos aparecem aqui assim que forem cadastrados no sistema.</p>
+            </div>
+          )}
 
-                  return (
-                    <li key={pedido.id}>
-                      <button
-                        type="button"
-                        className={`ped-linha ${ativo ? 'ativo' : ''}`}
-                        aria-pressed={ativo}
-                        onClick={() => selecionar(pedido)}
-                      >
-                        <span className="ped-linha-topo">
-                          <strong>#{pedido.order_number}</strong>
-                          <span className="ped-cliente">{pedido.customer_name}</span>
-                          {pedido.requires_forklift && (
-                            <span className="ped-empilhadeira" title="Precisa de empilhadeira">
-                              <Icone nome="empilhadeira" tamanho={15} />
-                            </span>
-                          )}
-                          <span className={`dash-status ${status.classe} ped-status`}>
-                            {status.icone && <Icone nome={status.icone} tamanho={12} />}
-                            {status.nome}
-                          </span>
-                        </span>
+          {pedidos.length > 0 && (
+            <div className="ped-grade">
+              <section className="dash-card ped-lista" aria-label="Lista de pedidos">
+                {visiveis.length === 0 && (
+                  <p className="dash-vazio">Nenhum pedido encontrado para esse filtro ou busca.</p>
+                )}
 
-                        <span className="ped-linha-base">
-                          <span className={semColetor ? 'ped-sem-coletor' : ''}>
-                            {itens.total} itens · {pedido.picker?.name ?? 'sem coletor'}
-                          </span>
-                          {pedido.status === 'pending' ? (
-                            <span className="ped-acao">
-                              {pedido.requires_forklift ? 'Liberar para empilhadeira' : 'Atribuir coletor'} →
-                            </span>
-                          ) : (
-                            <span className="dash-progresso">
-                              <span className={`dash-barra ${status.classe}`}>
-                                <span style={{ width: `${itens.percentual}%` }} />
+                <ul>
+                  {visiveis.map((pedido) => {
+                    const status = situacao(pedido)
+                    const itens = contarItens(pedido)
+                    const ativo = pedido.id === selecionado?.id
+                    const semColetor = !pedido.picker && pedido.status === 'pending'
+
+                    return (
+                      <li key={pedido.id}>
+                        <button
+                          type="button"
+                          className={`ped-linha ${ativo ? 'ativo' : ''}`}
+                          aria-pressed={ativo}
+                          onClick={() => selecionar(pedido)}
+                        >
+                          <span className="ped-linha-topo">
+                            <strong>{numeroPedido(pedido)}</strong>
+                            <span className="ped-cliente">criado às {formatarHora(pedido.created_at)}</span>
+                            {pedido.requires_forklift && (
+                              <span className="ped-empilhadeira" title="Precisa de empilhadeira">
+                                <Icone nome="empilhadeira" tamanho={15} />
                               </span>
-                              <small>{itens.percentual}%</small>
+                            )}
+                            <span className={`dash-status ${status.classe} ped-status`}>
+                              {status.icone && <Icone nome={status.icone} tamanho={12} />}
+                              {status.nome}
                             </span>
-                          )}
-                        </span>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            </section>
+                          </span>
 
-            {selecionado && rota ? (
-              <PainelRota
-                pedido={selecionado}
-                rota={rota}
-                verTodas={verTodasParadas}
-                onVerTodas={() => setVerTodasParadas(!verTodasParadas)}
-              />
-            ) : (
-              <section className="dash-card ped-painel ped-painel-vazio">
-                <Icone nome="rotas" tamanho={28} />
-                <p>Selecione um pedido na lista para ver a rota.</p>
+                          <span className="ped-linha-base">
+                            <span className={semColetor ? 'ped-sem-coletor' : ''}>
+                              {itens.total} itens · {pedido.picker?.name ?? 'sem coletor'}
+                            </span>
+                            {pedido.status === 'pending' ? (
+                              <span className="ped-acao">
+                                {pedido.requires_forklift ? 'Liberar para empilhadeira' : 'Atribuir coletor'} →
+                              </span>
+                            ) : (
+                              <span className="dash-progresso">
+                                <span className={`dash-barra ${status.classe}`}>
+                                  <span style={{ width: `${itens.percentual}%` }} />
+                                </span>
+                                <small>{itens.percentual}%</small>
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
               </section>
-            )}
-          </div>
+
+              {selecionado && rota ? (
+                <PainelRota
+                  pedido={selecionado}
+                  rota={rota}
+                  posicoes={posicoes}
+                  verTodas={verTodasParadas}
+                  onVerTodas={() => setVerTodasParadas(!verTodasParadas)}
+                />
+              ) : (
+                <section className="dash-card ped-painel ped-painel-vazio">
+                  <Icone nome="rotas" tamanho={28} />
+                  <p>Selecione um pedido na lista para ver a rota.</p>
+                </section>
+              )}
+            </div>
+          )}
         </main>
       </div>
     </div>
   )
 }
 
-function PainelRota({ pedido, rota, verTodas, onVerTodas }) {
+function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
   const status = situacao(pedido)
   const itens = contarItens(pedido)
   const concluido = pedido.status === 'completed'
@@ -259,7 +301,8 @@ function PainelRota({ pedido, rota, verTodas, onVerTodas }) {
   const lista = verTodas ? rota.paradas : rota.paradas.slice(inicio, inicio + PARADAS_VISIVEIS)
 
   let previsao = `${rota.minutosFaltando} min`
-  if (concluido) previsao = 'Concluído'
+  if (total === 0) previsao = '—'
+  else if (concluido) previsao = 'Concluído'
   else if (pedido.status === 'pending') previsao = `≈ ${rota.minutosFaltando} min`
 
   return (
@@ -267,14 +310,14 @@ function PainelRota({ pedido, rota, verTodas, onVerTodas }) {
       <div className="ped-painel-topo">
         <div>
           <div className="ped-painel-titulo">
-            <h2>Pedido #{pedido.order_number}</h2>
+            <h2>Pedido {numeroPedido(pedido)}</h2>
             <span className={`dash-status ${status.classe} ped-status`}>
               {status.icone && <Icone nome={status.icone} tamanho={12} />}
               {status.nome}
             </span>
           </div>
           <p>
-            {pedido.customer_name} · criado às {formatarHora(pedido.created_at)}
+            Criado às {formatarHora(pedido.created_at)} · {total} {total === 1 ? 'parada' : 'paradas'}
             {pedido.requires_forklift && ' · precisa de empilhadeira'}
           </p>
         </div>
@@ -314,7 +357,11 @@ function PainelRota({ pedido, rota, verTodas, onVerTodas }) {
           <strong>{pedido.status === 'pending' ? 'Rota sugerida' : 'Rota pelo vizinho mais próximo'}</strong>
           {pedido.status === 'in_progress' && <span className="ped-ao-vivo">Ao vivo</span>}
         </div>
-        <MapaRota paradas={rota.paradas} feitas={rota.feitas} concluido={concluido} />
+        {total > 0 ? (
+          <MapaRota posicoes={posicoes} paradas={rota.paradas} feitas={rota.feitas} concluido={concluido} />
+        ) : (
+          <p className="ped-mapa-vazio">Este pedido ainda não tem itens.</p>
+        )}
       </div>
 
       <div className="ped-paradas-topo">
