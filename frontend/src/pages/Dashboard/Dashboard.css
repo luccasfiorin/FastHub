@@ -125,6 +125,33 @@
   text-decoration: underline;
 }
 
+.dash-sidebar-rodape a.ativo {
+  position: relative;
+  align-self: stretch;
+  height: 40px;
+  margin: 0 -20px;
+  padding: 0 20px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  text-decoration: none;
+}
+
+.dash-sidebar-rodape a.ativo::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 2px;
+  background: #ffe100;
+}
+
+.dash-sidebar-rodape a.ativo .icone {
+  color: #ffe100;
+}
+
 /* Topo */
 
 .dash-principal {

@@ -9,9 +9,6 @@ const menu = [
   { id: 'relatorios', nome: 'Relatórios' },
 ]
 
-// Só Início, Pedidos e Coletores têm tela; os outros itens ficam sem ação até existirem.
-const comTela = ['inicio', 'pedidos', 'coletores']
-
 function Sidebar({ ativo, pedidosAbertos, onNavegar, onSair }) {
   return (
     <aside className="dash-sidebar">
@@ -24,10 +21,9 @@ function Sidebar({ ativo, pedidosAbertos, onNavegar, onSair }) {
             key={item.id}
             href="#"
             className={`dash-menu-item ${item.id === ativo ? 'ativo' : ''}`}
-            title={comTela.includes(item.id) ? undefined : 'Em breve'}
             onClick={(e) => {
               e.preventDefault()
-              if (comTela.includes(item.id)) onNavegar(item.id)
+              onNavegar(item.id)
             }}
           >
             <Icone nome={item.id} className="dash-menu-icone" />
@@ -40,7 +36,14 @@ function Sidebar({ ativo, pedidosAbertos, onNavegar, onSair }) {
       </nav>
 
       <div className="dash-sidebar-rodape">
-        <a href="#" onClick={(e) => e.preventDefault()} title="Em breve">
+        <a
+          href="#"
+          className={ativo === 'configuracoes' ? 'ativo' : ''}
+          onClick={(e) => {
+            e.preventDefault()
+            onNavegar('configuracoes')
+          }}
+        >
           <Icone nome="configuracoes" tamanho={16} />
           Configurações
         </a>

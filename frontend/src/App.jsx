@@ -3,6 +3,9 @@ import Login from './pages/Login/Login'
 import Dashboard from './pages/Dashboard/Dashboard'
 import Coletores from './pages/Coletores/Coletores'
 import Pedidos from './pages/Pedidos/Pedidos'
+import Mapa from './pages/Mapa/Mapa'
+import Relatorios from './pages/Relatorios/Relatorios'
+import Configuracoes from './pages/Configuracoes/Configuracoes'
 import { buscarUsuario, lerToken, sair } from './services/api'
 
 function App() {
@@ -44,6 +47,18 @@ function App() {
 
   if (pagina === 'coletores') {
     return <Coletores usuario={usuario} onNavegar={setPagina} onSair={sairDoSistema} />
+  }
+
+  if (pagina === 'mapa') {
+    return <Mapa usuario={usuario} onNavegar={setPagina} onSair={sairDoSistema} />
+  }
+
+  if (pagina === 'relatorios') {
+    return <Relatorios usuario={usuario} onNavegar={setPagina} onSair={sairDoSistema} />
+  }
+
+  if (pagina === 'configuracoes') {
+    return <Configuracoes usuario={usuario} onNavegar={setPagina} onSair={sairDoSistema} />
   }
 
   return <Dashboard onNavegar={setPagina} onSair={sairDoSistema} />
