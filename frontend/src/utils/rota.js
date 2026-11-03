@@ -1,35 +1,15 @@
 // Cálculo da rota de coleta pelo algoritmo do vizinho mais próximo.
 //
-// Como a planta é tratada:
-// - cada corredor (A, B, C...) é uma coluna; o coletor anda pelo vão à direita da estante;
-// - as posições 1 a 10 ficam no bloco de cima e as de 11 em diante no bloco de baixo;
-// - entre os dois blocos existe um corredor transversal: para trocar de corredor,
-//   o coletor sempre passa por ele.
+// Cada parada é um ponto { x, y } com as coordenadas da posição cadastrada no armazém
+// (coord_x e coord_y da tabela locations, em metros).
+// O coletor anda pelos corredores, então a distância entre dois pontos é a soma do
+// deslocamento na horizontal e na vertical (não a linha reta).
 
-export const PLANTA = {
-  corredores: ['A', 'B', 'C', 'D', 'E'],
-  posicoesPorCorredor: 19,
-  transversal: 10.5, // fica entre a posição 10 e a 11
-  metrosPorPosicao: 1.2,
-  metrosEntreCorredores: 3,
-}
-
-// A doca fica à esquerda do corredor A, na parte de baixo.
-export const DOCA = { corredor: -1, posicao: 19.5 }
-
-// "B-14" vira { corredor: 1, posicao: 14 }
-export function lerCodigoPosicao(codigo) {
-  const [letra, numero] = codigo.split('-')
-  return { corredor: PLANTA.corredores.indexOf(letra), posicao: Number(numero) }
-}
+// A doca ainda não existe no banco: por enquanto fica na origem (0, 0) da planta.
+export const DOCA = { x: 0, y: 0 }
 
 export function distancia(a, b) {
-  const { transversal, metrosPorPosicao, metrosEntreCorredores } = PLANTA
-  if (a.corredor === b.corredor) {
-    return Math.abs(a.posicao - b.posicao) * metrosPorPosicao
-  }
-  const ateTransversal = Math.abs(a.posicao - transversal) + Math.abs(b.posicao - transversal)
-  return ateTransversal * metrosPorPosicao + Math.abs(a.corredor - b.corredor) * metrosEntreCorredores
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
 }
 
 // Recebe as paradas de um pedido e devolve na ordem em que o coletor deve passar.
