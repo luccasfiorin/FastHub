@@ -144,6 +144,7 @@ class DemoPickersSeeder extends Seeder
                 'product_id' => $product->id,
                 'location_id' => $locations[$line % count($locations)]->id,
                 'quantity' => $quantity,
+                'unit_price' => 10,
                 'picked_quantity' => $pickedHere,
                 'is_picked' => $pickedHere === $quantity,
             ]);

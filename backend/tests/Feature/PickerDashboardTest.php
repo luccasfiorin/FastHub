@@ -131,8 +131,8 @@ class PickerDashboardTest extends TestCase
         ]);
 
         // 10 unidades: 5 bipadas. Primeira bipagem há 2h, última há 1h, com 30 min de pausa no meio.
-        $first = OrderItem::create(['order_id' => $order->id, 'product_id' => $product->id, 'location_id' => $near->id, 'quantity' => 5, 'picked_quantity' => 3, 'picked_at' => now()->subHours(2)]);
-        $second = OrderItem::create(['order_id' => $order->id, 'product_id' => $product->id, 'location_id' => $far->id, 'quantity' => 5, 'picked_quantity' => 2, 'picked_at' => now()->subHour()]);
+        $first = OrderItem::create(['order_id' => $order->id, 'product_id' => $product->id, 'location_id' => $near->id, 'quantity' => 5, 'unit_price' => 10, 'picked_quantity' => 3, 'picked_at' => now()->subHours(2)]);
+        $second = OrderItem::create(['order_id' => $order->id, 'product_id' => $product->id, 'location_id' => $far->id, 'quantity' => 5, 'unit_price' => 10, 'picked_quantity' => 2, 'picked_at' => now()->subHour()]);
 
         ScanEvent::create(['picker_id' => $picker->id, 'order_id' => $order->id, 'order_item_id' => $first->id, 'type' => 'ok', 'scanned_at' => now()->subHours(2)]);
         ScanEvent::create(['picker_id' => $picker->id, 'order_id' => $order->id, 'order_item_id' => $second->id, 'type' => 'ok', 'scanned_at' => now()->subHour()]);
