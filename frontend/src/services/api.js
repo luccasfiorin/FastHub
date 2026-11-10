@@ -118,6 +118,30 @@ export function buscarRotaPedido(id) {
   return requisicao(`/orders/${id}/route`)
 }
 
+export function criarPedido(corpo) {
+  return requisicao('/orders', 'POST', corpo)
+}
+
 export function listarPosicoes() {
   return requisicao('/locations')
+}
+
+export function criarPosicao(corpo) {
+  return requisicao('/locations', 'POST', corpo)
+}
+
+export function listarProdutos() {
+  return requisicao('/products')
+}
+
+export function criarProduto(corpo) {
+  return requisicao('/products', 'POST', corpo)
+}
+
+export function listarCorredores() {
+  return requisicao('/aisles')
+}
+
+export function criarCorredor(corpo) {
+  return requisicao('/aisles', 'POST', corpo)
 }
