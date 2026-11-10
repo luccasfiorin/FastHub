@@ -79,7 +79,7 @@ mesmo ritmo. Pela mesma conta, ficaria em torno de 0,3 s com 15 paradas, 3 s com
 - **Fica perto do ótimo:** em média, até 2,3% acima da melhor rota possível nos tamanhos em que dá para
   comparar. O vizinho mais próximo sozinho fica de 6% a 15% acima, e corredor por corredor, de 20% a 39%.
 - **Atende o RNF04 com folga:** até 50 paradas, o cálculo leva cerca de 1 ms. A requisição inteira é
-  dominada pelas duas consultas ao banco.
+  dominada pelas 5 consultas ao banco (número fixo, não cresce com o pedido).
 - **O tempo é previsível:** não explode com pedidos grandes, ao contrário do ótimo exato. O 2-opt tem limite
   de 50 passadas.
 - **É determinístico:** o mesmo pedido sempre gera a mesma rota, porque as paradas são ordenadas pelo id da

@@ -23,7 +23,8 @@ use Illuminate\Support\Collection;
  *   com 2-opt, que desfaz cruzamentos sem piorar a rota.
  * - A rota sempre termina voltando para a expedição.
  *
- * Desempenho (RNF04): duas consultas ao banco (pedido com itens e posições), e o
+ * Desempenho (RNF04): 5 consultas fixas ao banco (pedido, itens, produtos, posições e
+ * corredores, com eager loading), qualquer que seja o tamanho do pedido, e o
  * cálculo é O(n²) no vizinho mais próximo, com 2-opt limitado a MAX_2OPT_PASSES
  * passadas. Pedidos de dezenas de paradas ficam bem abaixo de 1 ms de CPU.
  *
