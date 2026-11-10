@@ -108,10 +108,10 @@ function estimarMinutos(metros, itens) {
   return Math.max(1, Math.round((metros + itens * 20) / 60))
 }
 
-// Converte a resposta de GET /orders/{id}/route para o formato que o painel e o mapa usam.
+// Converte uma rota da API (a pé ou de empilhadeira) para o formato que o painel e o mapa usam.
 // Cada parada é uma posição; itens do pedido na mesma posição aparecem juntos.
-function rotaDaApi(resposta) {
-  const paradas = resposta.stops.map((stop) => ({
+function paradasDaApi(rota) {
+  return rota.stops.map((stop) => ({
     id: stop.location_id,
     codigo: stop.code,
     produto: stop.items.map((item) => item.name ?? 'Produto sem nome').join(', '),
@@ -120,7 +120,22 @@ function rotaDaApi(resposta) {
     coletadaEm: stop.picked_at,
     ponto: { x: Number(stop.point.x), y: Number(stop.point.y) },
   }))
+}
+
+// Converte a resposta de GET /orders/{id}/route. Os campos de topo são a rota a pé;
+// `forklift_route` é a rota própria dos itens grandes (RN04), ou null se não houver.
+function rotaDaApi(resposta) {
+  const paradas = paradasDaApi(resposta)
   const itensFaltando = paradas.filter((p) => !p.coletada).reduce((soma, p) => soma + p.quantidade, 0)
+
+  let empilhadeira = null
+  if (resposta.forklift_route) {
+    empilhadeira = {
+      paradas: paradasDaApi(resposta.forklift_route),
+      feitas: resposta.forklift_route.picked_stops,
+      metros: Math.round(resposta.forklift_route.total_distance_m),
+    }
+  }
 
   return {
     paradas,
@@ -128,6 +143,7 @@ function rotaDaApi(resposta) {
     metros: Math.round(resposta.total_distance_m),
     minutosFaltando: estimarMinutos(resposta.remaining_distance_m, itensFaltando),
     doca: { x: Number(resposta.dock.x), y: Number(resposta.dock.y) },
+    empilhadeira,
   }
 }
 
@@ -354,6 +370,8 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
   const concluido = pedido.status === 'completed'
   const total = rota.paradas.length
   const proximaParada = concluido ? null : (rota.paradas[rota.feitas] ?? null)
+  const empilhadeira = rota.empilhadeira
+  const proximaEmpilhadeira = concluido || !empilhadeira ? null : (empilhadeira.paradas[empilhadeira.feitas] ?? null)
 
   // mostra a partir da última parada feita, para dar contexto de onde o coletor está
   const inicio = verTodas ? 0 : Math.max(0, Math.min(rota.feitas - 1, total - PARADAS_VISIVEIS))
@@ -398,7 +416,7 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
           <dd>{pedido.picker?.name ?? '—'}</dd>
         </div>
         <div>
-          <dt>Distância</dt>
+          <dt>{empilhadeira ? 'Distância a pé' : 'Distância'}</dt>
           <dd>{rota.metros} m</dd>
         </div>
         <div>
@@ -419,15 +437,21 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
               Próxima: <strong>{proximaParada.codigo}</strong>
             </span>
           )}
+          {proximaEmpilhadeira && (
+            <span className="ped-proxima-mapa empilhadeira">
+              Empilhadeira: <strong>{proximaEmpilhadeira.codigo}</strong>
+            </span>
+          )}
           {pedido.status === 'in_progress' && <span className="ped-ao-vivo">Ao vivo</span>}
         </div>
-        {total > 0 ? (
+        {total > 0 || empilhadeira ? (
           <MapaRota
             posicoes={posicoes}
             paradas={rota.paradas}
             feitas={rota.feitas}
             concluido={concluido}
             doca={rota.doca}
+            empilhadeira={empilhadeira}
           />
         ) : (
           <p className="ped-mapa-vazio">Este pedido ainda não tem itens.</p>
@@ -435,7 +459,10 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
       </div>
 
       <div className="ped-paradas-topo">
-        <h3>{verTodas || concluido ? 'Todas as paradas' : 'Próximas paradas'}</h3>
+        <h3>
+          {empilhadeira && 'Rota a pé · '}
+          {verTodas || concluido ? 'Todas as paradas' : 'Próximas paradas'}
+        </h3>
         <span>
           {rota.feitas} de {total} paradas
         </span>
@@ -468,6 +495,41 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
         <button type="button" className="ped-ver-todas" onClick={onVerTodas}>
           {verTodas ? 'Mostrar só as próximas' : `Ver todas as ${total} paradas`}
         </button>
+      )}
+
+      {empilhadeira && (
+        <>
+          <div className="ped-paradas-topo">
+            <h3>
+              <Icone nome="empilhadeira" tamanho={15} /> Rota da empilhadeira
+            </h3>
+            <span>
+              {empilhadeira.feitas} de {empilhadeira.paradas.length} paradas · {empilhadeira.metros} m
+            </span>
+          </div>
+
+          <ol className="ped-paradas empilhadeira">
+            {empilhadeira.paradas.map((parada, indice) => {
+              const feita = indice < empilhadeira.feitas
+              const proxima = !concluido && indice === empilhadeira.feitas
+              let rotulo = { nome: 'Falta', classe: 'neutro' }
+              if (feita) rotulo = { nome: 'Coletado', classe: 'concluido' }
+              if (proxima) rotulo = { nome: 'Próxima', classe: 'iniciado' }
+
+              return (
+                <li key={parada.id} className={proxima ? 'proxima' : ''}>
+                  <span className={`ped-numero ${feita ? 'feita' : proxima ? 'proxima' : ''}`}>
+                    {feita ? <Icone nome="check" tamanho={12} /> : `E${indice + 1}`}
+                  </span>
+                  <span className="ped-posicao">{parada.codigo}</span>
+                  <span className="ped-produto">{parada.produto}</span>
+                  <span className="ped-qtd">{parada.quantidade} un</span>
+                  <span className={`dash-status ${rotulo.classe}`}>{rotulo.nome}</span>
+                </li>
+              )
+            })}
+          </ol>
+        </>
       )}
     </section>
   )

@@ -38,9 +38,14 @@ class OrderRouteTest extends TestCase
         ]);
     }
 
-    private function produto(string $sku): Product
+    private function produto(string $sku, bool $grande = false): Product
     {
-        return Product::create(['sku' => $sku, 'name' => "Produto {$sku}", 'barcode_primary' => "789{$sku}"]);
+        return Product::create([
+            'sku' => $sku,
+            'name' => "Produto {$sku}",
+            'barcode_primary' => "789{$sku}",
+            'requires_forklift' => $grande,
+        ]);
     }
 
     /**
@@ -131,6 +136,65 @@ class OrderRouteTest extends TestCase
         $res = $this->getJson("/api/orders/{$order->id}/route")->assertOk();
 
         $res->assertJsonPath('total_stops', 3)->assertJsonCount(2, 'stops.0.items');
+    }
+
+    public function test_order_without_large_items_has_no_forklift_route(): void
+    {
+        [$order] = $this->pedido();
+        Sanctum::actingAs($this->usuario('manager', 'gestor@fasthub.test'));
+
+        $this->getJson("/api/orders/{$order->id}/route")
+            ->assertOk()
+            ->assertJsonPath('type', 'foot')
+            ->assertJsonPath('forklift_route', null);
+    }
+
+    /** RN04: itens grandes saem da rota a pé e formam uma rota própria. */
+    public function test_large_items_get_their_own_route(): void
+    {
+        [$order, $perto, $meio, $longe] = $this->pedido();
+        Sanctum::actingAs($this->usuario('manager', 'gestor@fasthub.test'));
+
+        // dois itens grandes: um numa posição nova (8,0) e outro na mesma posição de um item a pé (5,0)
+        $grandeLonge = $this->posicao('04', 8, 0);
+        $order->items()->create(['product_id' => $this->produto('G1', true)->id, 'location_id' => $grandeLonge->id, 'quantity' => 1, 'unit_price' => 0]);
+        $order->items()->create(['product_id' => $this->produto('G2', true)->id, 'location_id' => $meio->id, 'quantity' => 1, 'unit_price' => 0]);
+
+        $res = $this->getJson("/api/orders/{$order->id}/route")->assertOk();
+
+        // rota a pé continua igual: 2 → 5 → 10 → volta = 20 m, sem nenhum item grande
+        $this->assertSame([$perto->id, $meio->id, $longe->id], array_column($res->json('stops'), 'location_id'));
+        $res->assertJsonPath('total_distance_m', 20)->assertJsonCount(1, 'stops.1.items');
+        $this->assertNotContains(true, array_column(array_merge(...array_column($res->json('stops'), 'items')), 'requires_forklift'));
+
+        // rota da empilhadeira: 5 → 8 → volta = 16 m, só com os itens grandes
+        $res->assertJsonPath('forklift_route.type', 'forklift')
+            ->assertJsonPath('forklift_route.total_stops', 2)
+            ->assertJsonPath('forklift_route.next_stop', 1)
+            ->assertJsonPath('forklift_route.total_distance_m', 16)
+            ->assertJsonPath('forklift_route.stops.0.items.0.requires_forklift', true);
+        $this->assertSame([$meio->id, $grandeLonge->id], array_column($res->json('forklift_route.stops'), 'location_id'));
+    }
+
+    public function test_order_with_only_large_items_has_empty_foot_route(): void
+    {
+        $order = Order::create(['order_number' => 'ORD-GRANDE', 'status' => 'pending']);
+        $order->items()->create([
+            'product_id' => $this->produto('G1', true)->id,
+            'location_id' => $this->posicao('01', 3, 4)->id,
+            'quantity' => 1,
+            'unit_price' => 0,
+        ]);
+        Sanctum::actingAs($this->usuario('manager', 'gestor@fasthub.test'));
+
+        $this->getJson("/api/orders/{$order->id}/route")
+            ->assertOk()
+            ->assertJsonPath('total_stops', 0)
+            ->assertJsonPath('next_stop', null)
+            ->assertJsonPath('total_distance_m', 0)
+            ->assertJsonPath('path', [])
+            ->assertJsonPath('forklift_route.total_stops', 1)
+            ->assertJsonPath('forklift_route.total_distance_m', 14);
     }
 
     public function test_picker_sees_only_own_order(): void

@@ -22,6 +22,9 @@ use Illuminate\Support\Collection;
  *   coletada (ou da expedição, se o pedido ainda não começou), e depois melhoradas
  *   com 2-opt, que desfaz cruzamentos sem piorar a rota.
  * - A rota sempre termina voltando para a expedição.
+ * - RN04: itens grandes (produto com requires_forklift) saem da rota a pé e
+ *   formam uma rota própria, calculada com as mesmas regras, em forklift_route.
+ *   Os campos de topo da resposta continuam sendo a rota a pé.
  *
  * Desempenho (RNF04): 5 consultas fixas ao banco (pedido, itens, produtos, posições e
  * corredores, com eager loading), qualquer que seja o tamanho do pedido, e o
@@ -47,6 +50,7 @@ class RouteService
      *     order_number: string,
      *     status: string,
      *     dock: array{x: float, y: float},
+     *     type: 'foot',
      *     stops: list<array>,
      *     picked_stops: int,
      *     total_stops: int,
@@ -55,18 +59,52 @@ class RouteService
      *     remaining_distance_m: float,
      *     return_to_dock_m: float,
      *     path: list<array{x: float, y: float}>,
+     *     forklift_route: ?array,
      *     unlocated_items: list<array>
      * }
+     *
+     * forklift_route tem os mesmos campos da rota a pé (type, stops, next_stop, distâncias, path)
+     * e é null quando o pedido não tem itens grandes.
      */
     public function forOrder(Order $order): array
     {
-        $order->loadMissing(['items.product:id,sku,name', 'items.location.aisle:id,code,name']);
+        $order->loadMissing([
+            'items.product:id,sku,name,requires_forklift',
+            'items.location.aisle:id,code,name',
+        ]);
 
         $dock = $this->dock();
+        $concluido = $order->status === 'completed';
 
         [$comPosicao, $semPosicao] = $order->items->partition(fn (OrderItem $item) => $item->location !== null);
 
-        $paradas = $this->agruparPorPosicao($comPosicao);
+        // RN04: itens grandes (produto com requires_forklift) saem da rota a pé e formam uma rota própria.
+        [$grandes, $aPe] = $comPosicao->partition(fn (OrderItem $item) => $this->ehGrande($item));
+
+        $rotaGrandes = null;
+        if ($grandes->isNotEmpty()) {
+            $rotaGrandes = ['type' => 'forklift'] + $this->calcularRota($grandes, $dock, $concluido);
+        }
+
+        return [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'status' => $order->status,
+            'dock' => $dock,
+            // Os campos de topo continuam sendo a rota a pé (mesmo formato de antes).
+            'type' => 'foot',
+            ...$this->calcularRota($aPe, $dock, $concluido),
+            'forklift_route' => $rotaGrandes,
+            'unlocated_items' => $semPosicao->map(fn (OrderItem $item) => $this->item($item))->values()->all(),
+        ];
+    }
+
+    /**
+     * Calcula uma rota (a pé ou de empilhadeira) para um grupo de itens, saindo e voltando à expedição.
+     */
+    private function calcularRota(Collection $itens, array $dock, bool $concluido): array
+    {
+        $paradas = $this->agruparPorPosicao($itens);
 
         // 1. Coletadas primeiro, na ordem em que foram coletadas.
         $feitas = array_values(array_filter($paradas, fn ($p) => $p['picked']));
@@ -101,25 +139,22 @@ class RouteService
             $anterior = $parada['point'];
         }
 
-        $volta = $this->distancia($anterior, $dock);
+        // Rota sem paradas não sai da expedição.
+        $volta = $stops === [] ? 0.0 : $this->distancia($anterior, $dock);
         $total += $volta;
         $restante += $volta;
 
-        // Pedido concluído (ou vazio) não tem mais nada a percorrer.
+        // Nada faltando, nada a percorrer.
         if ($faltam === []) {
             $restante = 0.0;
         }
 
         $proxima = null;
-        if ($order->status !== 'completed' && $faltam !== []) {
+        if (! $concluido && $faltam !== []) {
             $proxima = count($feitas) + 1;
         }
 
         return [
-            'order_id' => $order->id,
-            'order_number' => $order->order_number,
-            'status' => $order->status,
-            'dock' => $dock,
             'stops' => $stops,
             'picked_stops' => count($feitas),
             'total_stops' => count($stops),
@@ -127,9 +162,14 @@ class RouteService
             'total_distance_m' => round($total, 2),
             'remaining_distance_m' => round($restante, 2),
             'return_to_dock_m' => round($volta, 2),
-            'path' => $this->caminho($dock, array_column($stops, 'point')),
-            'unlocated_items' => $semPosicao->map(fn (OrderItem $item) => $this->item($item))->values()->all(),
+            'path' => $stops === [] ? [] : $this->caminho($dock, array_column($stops, 'point')),
         ];
+    }
+
+    /** Item grande = produto marcado como requires_forklift (RN04). */
+    private function ehGrande(OrderItem $item): bool
+    {
+        return (bool) $item->product?->requires_forklift;
     }
 
     /** Distância pelos corredores (Manhattan), em metros. */
@@ -298,6 +338,7 @@ class RouteService
             'quantity' => $item->quantity,
             'picked_quantity' => $item->picked_quantity,
             'is_picked' => (bool) $item->is_picked,
+            'requires_forklift' => $this->ehGrande($item),
         ];
     }
 }

@@ -16,8 +16,15 @@ function limites(pontos) {
 }
 
 // `doca` é o ponto da expedição; vem da API (dock) e, sem ela, fica na origem da planta.
-function MapaRota({ posicoes, paradas, feitas, concluido, doca = DOCA }) {
-  const pontosDaPlanta = [doca, ...posicoes.map((p) => p.ponto), ...paradas.map((p) => p.ponto)]
+// `empilhadeira` ({ paradas, feitas }) é a rota própria dos itens grandes (RN04), desenhada em outra cor.
+function MapaRota({ posicoes, paradas, feitas, concluido, doca = DOCA, empilhadeira = null }) {
+  const paradasEmpilhadeira = empilhadeira?.paradas ?? []
+  const pontosDaPlanta = [
+    doca,
+    ...posicoes.map((p) => p.ponto),
+    ...paradas.map((p) => p.ponto),
+    ...paradasEmpilhadeira.map((p) => p.ponto),
+  ]
   const { minX, maxX, minY, maxY } = limites(pontosDaPlanta)
   const larguraUtil = LARGURA - MARGEM * 2
   const escala = Math.min(
@@ -56,13 +63,26 @@ function MapaRota({ posicoes, paradas, feitas, concluido, doca = DOCA }) {
 
   const [docaX, docaY] = tela(doca)
 
+  // Rota da empilhadeira: mesmo desenho, com caminho e paradas próprios.
+  const pontosEmp = paradasEmpilhadeira.map((p) => p.ponto)
+  const feitasEmp = empilhadeira?.feitas ?? 0
+  const ultimoFeitoEmp = feitasEmp > 0 ? pontosEmp[feitasEmp - 1] : doca
+  const caminhoEmpFeito = caminho([doca, ...pontosEmp.slice(0, feitasEmp)])
+  const caminhoEmpFalta = pontosEmp.length ? caminho([ultimoFeitoEmp, ...pontosEmp.slice(feitasEmp), doca]) : ''
+
+  // Se a empilhadeira para na mesma posição que o coletor a pé, desloca o marcador para não sobrepor.
+  const ocupados = new Set(pontos.map((p) => `${p.x},${p.y}`))
+  const DESLOCAMENTO = 13
+
   return (
     <div className="ped-mapa">
       <svg
         viewBox={`0 0 ${LARGURA} ${altura}`}
         className="ped-mapa-svg"
         role="img"
-        aria-label={`Rota com ${paradas.length} paradas, ${feitas} já coletadas`}
+        aria-label={`Rota com ${paradas.length} paradas, ${feitas} já coletadas${
+          empilhadeira ? `; rota da empilhadeira com ${paradasEmpilhadeira.length} paradas` : ''
+        }`}
       >
         {posicoes.map((posicao) => {
           const [x, y] = tela(posicao.ponto)
@@ -95,6 +115,9 @@ function MapaRota({ posicoes, paradas, feitas, concluido, doca = DOCA }) {
           Doca
         </text>
 
+        {caminhoEmpFalta && <polyline points={caminhoEmpFalta} className="ped-caminho empilhadeira falta" />}
+        {caminhoEmpFeito && <polyline points={caminhoEmpFeito} className="ped-caminho empilhadeira feito" />}
+
         {caminhoFalta && <polyline points={caminhoFalta} className="ped-caminho falta" />}
         {caminhoFeito && <polyline points={caminhoFeito} className="ped-caminho feito" />}
 
@@ -116,6 +139,28 @@ function MapaRota({ posicoes, paradas, feitas, concluido, doca = DOCA }) {
             </g>
           )
         })}
+
+        {paradasEmpilhadeira.map((parada, i) => {
+          let [x, y] = tela(parada.ponto)
+          if (ocupados.has(`${parada.ponto.x},${parada.ponto.y}`)) {
+            x += DESLOCAMENTO
+            y -= DESLOCAMENTO
+          }
+          const proxima = !concluido && i === feitasEmp
+          let classe = i < feitasEmp ? 'feita' : 'falta'
+          if (proxima) classe = 'proxima'
+
+          return (
+            <g key={`emp-${parada.id}`} className={`ped-parada empilhadeira ${classe}`}>
+              {proxima && <circle cx={x} cy={y} r={17} className="ped-parada-halo" />}
+              <rect x={x - 11} y={y - 10} width={22} height={20} rx={5} />
+              <text x={x} y={y + 3.5}>E{i + 1}</text>
+              <title>
+                Empilhadeira {i + 1}: {parada.codigo} · {parada.produto}
+              </title>
+            </g>
+          )
+        })}
       </svg>
 
       <ul className="ped-legenda">
@@ -128,6 +173,11 @@ function MapaRota({ posicoes, paradas, feitas, concluido, doca = DOCA }) {
         <li>
           <span className="ped-legenda-ponto falta" /> Falta coletar
         </li>
+        {empilhadeira && (
+          <li>
+            <span className="ped-legenda-ponto empilhadeira" /> Empilhadeira (itens grandes)
+          </li>
+        )}
       </ul>
     </div>
   )

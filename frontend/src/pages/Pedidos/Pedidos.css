@@ -404,6 +404,65 @@
   }
 }
 
+/* Rota da empilhadeira (RN04): itens grandes, em laranja */
+.ped-proxima-mapa.empilhadeira {
+  margin-left: 0;
+  background: #ff9f43;
+}
+
+.ped-caminho.empilhadeira.feito {
+  stroke: #ff9f43;
+}
+
+.ped-caminho.empilhadeira.falta {
+  stroke: #ff9f43;
+  opacity: 0.9;
+}
+
+.ped-parada.empilhadeira rect {
+  fill: #323664;
+  stroke: #ff9f43;
+  stroke-width: 1.5;
+}
+
+.ped-parada.empilhadeira text {
+  fill: #ffd2a6;
+}
+
+.ped-parada.empilhadeira.feita rect {
+  fill: #ff9f43;
+}
+
+.ped-parada.empilhadeira.feita text,
+.ped-parada.empilhadeira.proxima text {
+  fill: #22253f;
+}
+
+.ped-parada.empilhadeira.proxima rect {
+  fill: #fff;
+}
+
+.ped-parada.empilhadeira.proxima .ped-parada-halo {
+  fill: rgba(255, 159, 67, 0.3);
+}
+
+.ped-legenda-ponto.empilhadeira {
+  border-radius: 3px;
+  background: #ff9f43;
+}
+
+.ped-paradas-topo h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ped-paradas.empilhadeira .ped-numero {
+  border-color: #ff9f43;
+  border-radius: 6px;
+  color: #b45f06;
+}
+
 .ped-mapa-vazio {
   margin: 16px 0 4px;
   font-size: 13px;

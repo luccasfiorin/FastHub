@@ -1,6 +1,6 @@
 # Algoritmo da rota de coleta
 
-**Requisito:** RF04 (calcular a ordem das posições a visitar, saindo e voltando à expedição) · RNF04 (desempenho)
+**Requisito:** RF04 (calcular a ordem das posições a visitar, saindo e voltando à expedição) · RNF04 (desempenho) · RN04 (rota própria para itens grandes)
 **Status:** decidido
 **Data:** 10/11/2026
 **Implementação:** `backend/app/Services/RouteService.php`, exposto em `GET /api/orders/{order}/route`
@@ -106,5 +106,6 @@ mesmo ritmo. Pela mesma conta, ficaria em torno de 0,3 s com 15 paradas, 3 s com
   passar a considerá-los. O resto do algoritmo não muda.
 - **Os pedidos da simulação são aleatórios.** Com o histórico real de pedidos, vale repetir a comparação.
 - **A expedição é fixa por configuração.** Se houver mais de uma doca, ela deve vir do pedido.
-- **Empilhadeira:** pedidos com `requires_forklift` usam a mesma rota. Se a empilhadeira tiver corredores
-  proibidos, isso entra como restrição na distância.
+- **Itens grandes (RN04):** itens de produtos com `requires_forklift` saem da rota a pé e formam uma
+  rota própria (`forklift_route` na API), calculada com o mesmo algoritmo e desenhada em laranja no mapa.
+  Se a empilhadeira tiver corredores proibidos, isso entra como restrição na distância dessa rota.
