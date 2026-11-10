@@ -627,3 +627,127 @@
     display: none;
   }
 }
+
+/* Novo pedido (o modal reaproveita col-fundo e col-modal do Coletores.css) */
+
+.ped-aviso-ok {
+  padding: 10px 16px;
+  border: 1px solid #b9e2c8;
+  border-radius: 8px;
+  background: #e9f7ee;
+  color: #1e6b3d;
+}
+
+.col-modal.ped-novo {
+  max-width: 640px;
+}
+
+.ped-novo-itens {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ped-novo-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e6e8f0;
+  border-radius: 10px;
+  background: #fafbfd;
+}
+
+.ped-novo-item-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #22253f;
+}
+
+.ped-novo-item-topo button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  color: #b4272c;
+  cursor: pointer;
+}
+
+.col-modal-linha .ped-novo-largo {
+  flex: 3;
+}
+
+.col-modal-linha .ped-novo-qtd {
+  flex: 1;
+  min-width: 96px;
+}
+
+.ped-novo-cadastro {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 14px 14px;
+  border: 1px dashed #c9cbe0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ped-novo-cadastro legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #49509b;
+}
+
+.col-modal label.ped-novo-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: #22253f;
+}
+
+.col-modal .ped-novo-check input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
+.col-modal input[aria-invalid='true'],
+.col-modal select[aria-invalid='true'] {
+  border-color: #e5484d;
+}
+
+.ped-novo-dica {
+  margin: -4px 0 0;
+  font-size: 12px;
+  color: #9a9daa;
+}
+
+.ped-novo-adicionar {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: #49509b;
+  cursor: pointer;
+}
+
+.ped-novo-aviso {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fff4e5;
+  font-size: 13px;
+  color: #8a4b00;
+}
