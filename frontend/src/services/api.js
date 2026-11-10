@@ -113,6 +113,11 @@ export function listarPedidos() {
   return requisicao('/orders')
 }
 
+// Rota de coleta calculada no backend: paradas em ordem, saindo e voltando à expedição.
+export function buscarRotaPedido(id) {
+  return requisicao(`/orders/${id}/route`)
+}
+
 export function listarPosicoes() {
   return requisicao('/locations')
 }

@@ -271,6 +271,21 @@
   font-size: 13px;
 }
 
+/* Próxima posição a coletar, em destaque no topo do mapa (RF05) */
+.ped-proxima-mapa {
+  margin-left: auto;
+  margin-right: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11px;
+  color: #22253f;
+}
+
+.ped-proxima-mapa strong {
+  font-weight: 700;
+}
+
 .ped-ao-vivo {
   display: inline-flex;
   align-items: center;

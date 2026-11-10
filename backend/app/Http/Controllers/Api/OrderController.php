@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Services\RouteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -56,5 +57,20 @@ class OrderController extends Controller
         }
 
         return response()->json($order->load('items.product', 'items.location', 'picker'), 201);
+    }
+
+    /**
+     * Rota de coleta do pedido: ordem das posições, saindo e voltando à expedição (RF04).
+     * O gestor vê qualquer pedido; o coletor só os pedidos atribuídos a ele.
+     */
+    public function route(Request $request, Order $order, RouteService $routes)
+    {
+        $user = $request->user();
+
+        if ($user->role !== 'manager' && (int) $order->picker_id !== (int) $user->id) {
+            return response()->json(['message' => 'Acesso não autorizado para este pedido.'], 403);
+        }
+
+        return response()->json($routes->forOrder($order));
     }
 }

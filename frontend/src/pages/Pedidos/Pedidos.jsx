@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Sidebar from '../../components/Sidebar'
 import Header from '../../components/Header'
 import Icone from '../../components/Icone'
 import MapaRota from './MapaRota'
 import { usePedidos } from '../../hooks/usePedidos'
+import { buscarRotaPedido } from '../../services/api'
 import { calcularRota, distancia, DOCA } from '../../utils/rota'
 import { formatarHora } from '../../utils/formatar'
 import './Pedidos.css'
@@ -97,11 +98,68 @@ function montarRota(pedido) {
   }
   metrosFaltando += distancia(anterior, DOCA)
 
-  // estimativa simples: 1 m/s andando + 20 s por item para pegar e bipar
   const itensFaltando = rota.paradas.slice(feitas).reduce((soma, p) => soma + p.quantidade, 0)
-  const minutosFaltando = Math.max(1, Math.round((metrosFaltando + itensFaltando * 20) / 60))
 
-  return { ...rota, feitas, minutosFaltando }
+  return { ...rota, feitas, minutosFaltando: estimarMinutos(metrosFaltando, itensFaltando), doca: DOCA }
+}
+
+// estimativa simples: 1 m/s andando + 20 s por item para pegar e bipar
+function estimarMinutos(metros, itens) {
+  return Math.max(1, Math.round((metros + itens * 20) / 60))
+}
+
+// Converte a resposta de GET /orders/{id}/route para o formato que o painel e o mapa usam.
+// Cada parada é uma posição; itens do pedido na mesma posição aparecem juntos.
+function rotaDaApi(resposta) {
+  const paradas = resposta.stops.map((stop) => ({
+    id: stop.location_id,
+    codigo: stop.code,
+    produto: stop.items.map((item) => item.name ?? 'Produto sem nome').join(', '),
+    quantidade: stop.items.reduce((soma, item) => soma + item.quantity, 0),
+    coletada: stop.picked,
+    coletadaEm: stop.picked_at,
+    ponto: { x: Number(stop.point.x), y: Number(stop.point.y) },
+  }))
+  const itensFaltando = paradas.filter((p) => !p.coletada).reduce((soma, p) => soma + p.quantidade, 0)
+
+  return {
+    paradas,
+    feitas: resposta.picked_stops,
+    metros: Math.round(resposta.total_distance_m),
+    minutosFaltando: estimarMinutos(resposta.remaining_distance_m, itensFaltando),
+    doca: { x: Number(resposta.dock.x), y: Number(resposta.dock.y) },
+  }
+}
+
+// Rota do pedido selecionado, calculada no backend (RF04) e buscada de novo quando o pedido
+// muda (a lista atualiza a cada 30 s). Enquanto a resposta não chega, ou se a API falhar,
+// usa o cálculo local de utils/rota.js para o mapa não ficar vazio.
+function useRotaPedido(pedido) {
+  const [resposta, setResposta] = useState(null)
+
+  useEffect(() => {
+    if (!pedido) return undefined
+    let ativo = true
+
+    buscarRotaPedido(pedido.id)
+      .then((dados) => {
+        if (ativo) setResposta(dados)
+      })
+      .catch(() => {
+        if (ativo) setResposta(null)
+      })
+
+    // troca de pedido antes da resposta chegar: ignora a resposta antiga
+    return () => {
+      ativo = false
+    }
+  }, [pedido])
+
+  return useMemo(() => {
+    if (!pedido) return null
+    if (resposta && resposta.order_id === pedido.id) return rotaDaApi(resposta)
+    return montarRota(pedido)
+  }, [pedido, resposta])
 }
 
 function Pedidos({ usuario, onNavegar, onSair }) {
@@ -145,7 +203,7 @@ function Pedidos({ usuario, onNavegar, onSair }) {
   // Mostra o pedido escolhido se ele estiver na lista filtrada; se não, o primeiro da lista
   // (que é um em andamento, se houver).
   const selecionado = visiveis.find((p) => p.id === selecionadoId) ?? visiveis[0] ?? null
-  const rota = useMemo(() => (selecionado ? montarRota(selecionado) : null), [selecionado])
+  const rota = useRotaPedido(selecionado)
   const abertos = pedidos.filter((p) => p.status === 'pending' || p.status === 'in_progress').length
   const emAndamento = pedidos.filter((p) => p.status === 'in_progress').length
 
@@ -295,6 +353,7 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
   const itens = contarItens(pedido)
   const concluido = pedido.status === 'completed'
   const total = rota.paradas.length
+  const proximaParada = concluido ? null : (rota.paradas[rota.feitas] ?? null)
 
   // mostra a partir da última parada feita, para dar contexto de onde o coletor está
   const inicio = verTodas ? 0 : Math.max(0, Math.min(rota.feitas - 1, total - PARADAS_VISIVEIS))
@@ -354,11 +413,22 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
 
       <div className="ped-mapa-card">
         <div className="ped-mapa-topo">
-          <strong>{pedido.status === 'pending' ? 'Rota sugerida' : 'Rota pelo vizinho mais próximo'}</strong>
+          <strong>{pedido.status === 'pending' ? 'Rota sugerida' : 'Rota calculada'}</strong>
+          {proximaParada && (
+            <span className="ped-proxima-mapa">
+              Próxima: <strong>{proximaParada.codigo}</strong>
+            </span>
+          )}
           {pedido.status === 'in_progress' && <span className="ped-ao-vivo">Ao vivo</span>}
         </div>
         {total > 0 ? (
-          <MapaRota posicoes={posicoes} paradas={rota.paradas} feitas={rota.feitas} concluido={concluido} />
+          <MapaRota
+            posicoes={posicoes}
+            paradas={rota.paradas}
+            feitas={rota.feitas}
+            concluido={concluido}
+            doca={rota.doca}
+          />
         ) : (
           <p className="ped-mapa-vazio">Este pedido ainda não tem itens.</p>
         )}

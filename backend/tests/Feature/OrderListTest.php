@@ -83,7 +83,7 @@ class OrderListTest extends TestCase
             ->assertJsonPath('0.has_mismatch', false)
             ->assertJsonPath('0.items.0.product.name', 'Cafeteira')
             ->assertJsonPath('0.items.0.location.aisle.code', 'A')
-            ->assertJsonPath('0.items.0.location.coord_x', 4.0)
+            ->assertJsonPath('0.items.0.location.coord_x', 4)
             ->assertJsonPath('0.items.0.picked_quantity', 0);
 
         ScanEvent::create([

@@ -15,8 +15,9 @@ function limites(pontos) {
   return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
 }
 
-function MapaRota({ posicoes, paradas, feitas, concluido }) {
-  const pontosDaPlanta = [DOCA, ...posicoes.map((p) => p.ponto), ...paradas.map((p) => p.ponto)]
+// `doca` é o ponto da expedição; vem da API (dock) e, sem ela, fica na origem da planta.
+function MapaRota({ posicoes, paradas, feitas, concluido, doca = DOCA }) {
+  const pontosDaPlanta = [doca, ...posicoes.map((p) => p.ponto), ...paradas.map((p) => p.ponto)]
   const { minX, maxX, minY, maxY } = limites(pontosDaPlanta)
   const larguraUtil = LARGURA - MARGEM * 2
   const escala = Math.min(
@@ -40,9 +41,9 @@ function MapaRota({ posicoes, paradas, feitas, concluido }) {
   }
 
   const pontos = paradas.map((p) => p.ponto)
-  const ultimoFeito = feitas > 0 ? pontos[feitas - 1] : DOCA
-  const caminhoFeito = caminho([DOCA, ...pontos.slice(0, feitas)])
-  const caminhoFalta = caminho([ultimoFeito, ...pontos.slice(feitas), DOCA])
+  const ultimoFeito = feitas > 0 ? pontos[feitas - 1] : doca
+  const caminhoFeito = caminho([doca, ...pontos.slice(0, feitas)])
+  const caminhoFalta = caminho([ultimoFeito, ...pontos.slice(feitas), doca])
 
   // nome do corredor escrito em cima da primeira posição dele
   const corredores = new Map()
@@ -53,7 +54,7 @@ function MapaRota({ posicoes, paradas, feitas, concluido }) {
     }
   }
 
-  const [docaX, docaY] = tela(DOCA)
+  const [docaX, docaY] = tela(doca)
 
   return (
     <div className="ped-mapa">

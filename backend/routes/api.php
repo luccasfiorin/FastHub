@@ -23,6 +23,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('locations', LocationController::class)->only(['index', 'show']);
     Route::apiResource('products', ProductController::class)->only(['index', 'show']);
 
+    // Rota de coleta: gestor vê qualquer pedido, coletor só os dele (checado no controller).
+    Route::get('/orders/{order}/route', [OrderController::class, 'route']);
+
     Route::middleware('role:manager')->group(function () {
         Route::get('/manager/dashboard', function () {
             return response()->json(['message' => 'Painel do Gestor autorizado com sucesso!']);
