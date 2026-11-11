@@ -35,8 +35,7 @@ cp .env.example .env               # já vem com DB_CONNECTION=sqlite, não prec
 touch database/database.sqlite     # cria o arquivo do banco
 php artisan key:generate
 php artisan migrate
-php artisan db:seed --class=UserSeeder        # usuários de acesso
-php artisan db:seed --class=DemoPickersSeeder # opcional: coletores, pedidos e bipagens de demonstração
+php artisan db:seed           # usuários de acesso + armazém de exemplo completo
 php artisan serve
 ```
 
@@ -54,22 +53,32 @@ então os dois precisam estar rodando.
 
 ## Acesso
 
-Usuários criados pelo `UserSeeder`:
+Usuários criados pelo `php artisan db:seed` (senha de todos: `password123`):
 
-| Perfil  | E-mail              | Senha       |
-| ------- | ------------------- | ----------- |
-| Gestor  | gestor@fasthub.com  | password123 |
-| Coletor | coletor@fasthub.com | password123 |
+| Perfil                 | E-mail                      | Situação no exemplo                 |
+| ---------------------- | --------------------------- | ----------------------------------- |
+| Gestor                 | gestor@fasthub.com          | —                                   |
+| Coletor                | coletor@fasthub.com         | offline, 2 pedidos na fila          |
+| Coletor                | ana.paula@fasthub.com       | ativo, pedido em andamento          |
+| Coletor                | joao.ricardo@fasthub.com    | ativo, pedido com divergência       |
+| Coletor                | bruna.souza@fasthub.com     | em pausa                            |
+| Coletor (empilhadeira) | marcos.teixeira@fasthub.com | ativo, Empilhadeira 02              |
 
-Os coletores do `DemoPickersSeeder` usam e-mail `@demo.fasthub` e a mesma
-senha. Para remover só eles:
+O armazém de exemplo (`ArmazemSeeder`) tem os corredores A–E com 19 posições
+cada, 40 produtos (6 de empilhadeira) e cerca de 190 pedidos em todos os status:
+concluídos hoje e nos últimos 12 dias, um em andamento por coletor, pendentes e
+cancelados, com as bipagens e pausas de cada um. Os horários são relativos ao
+momento em que o seeder roda, então o "hoje" das telas sempre tem movimento.
+
+O `DemoPickersSeeder` antigo continua disponível à parte
+(`php artisan db:seed --class=DemoPickersSeeder`). Os coletores dele usam
+e-mail `@demo.fasthub` e a mesma senha. Para remover só eles:
 
 ```bash
 php artisan tinker --execute 'App\Models\User::where("email","like","%@demo.fasthub")->delete();'
 ```
 
-Para zerar o banco e começar de novo: `php artisan migrate:fresh` e rode os
-seeders outra vez.
+Para zerar o banco e começar de novo com o exemplo: `php artisan migrate:fresh --seed`.
 
 ## Testes
 
