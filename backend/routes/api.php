@@ -8,6 +8,9 @@ use App\Http\Controllers\PickerController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\OrderStatusController;
+use App\Http\Controllers\Api\PickerOrderController;
+use App\Http\Controllers\Api\ScanEventController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -25,6 +28,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Rota de coleta: gestor vê qualquer pedido, coletor só os dele (checado no controller).
     Route::get('/orders/{order}/route', [OrderController::class, 'route']);
+
+    // Status do pedido: as regras de quem pode o quê ficam no OrderStatusController.
+    Route::post('/orders/{order}/start', [OrderStatusController::class, 'start']);
+    Route::post('/orders/{order}/complete', [OrderStatusController::class, 'complete']);
+    Route::post('/orders/{order}/cancel', [OrderStatusController::class, 'cancel']);
 
     Route::middleware('role:manager')->group(function () {
         Route::get('/manager/dashboard', function () {
@@ -45,6 +53,8 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
         Route::post('/picker/status', [PickerController::class, 'updateOwnStatus']);
+        Route::get('/picker/orders', [PickerOrderController::class, 'index']);
+        Route::post('/scan-events', [ScanEventController::class, 'store']);
     });
 
     Route::middleware(['auth:sanctum', 'role:manager'])->group(function () {
