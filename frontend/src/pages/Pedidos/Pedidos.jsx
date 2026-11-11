@@ -3,6 +3,7 @@ import Sidebar from '../../components/Sidebar'
 import Header from '../../components/Header'
 import Icone from '../../components/Icone'
 import MapaRota from './MapaRota'
+import NovoPedido from './NovoPedido'
 import { usePedidos } from '../../hooks/usePedidos'
 import { buscarRotaPedido } from '../../services/api'
 import { calcularRota, distancia, DOCA } from '../../utils/rota'
@@ -184,6 +185,8 @@ function Pedidos({ usuario, onNavegar, onSair }) {
   const [filtro, setFiltro] = useState('todos')
   const [selecionadoId, setSelecionadoId] = useState(null)
   const [verTodasParadas, setVerTodasParadas] = useState(false)
+  const [novoAberto, setNovoAberto] = useState(false)
+  const [avisoCriado, setAvisoCriado] = useState('')
 
   const pedidos = useMemo(
     () => [...recebidos].sort((a, b) => (ordemStatus[a.status] ?? 9) - (ordemStatus[b.status] ?? 9) || b.id - a.id),
@@ -228,6 +231,16 @@ function Pedidos({ usuario, onNavegar, onSair }) {
     setVerTodasParadas(false)
   }
 
+  // pedido recém-criado: limpa filtro e busca para ele aparecer na lista e já abre a rota dele
+  function pedidoCriado(pedido) {
+    setNovoAberto(false)
+    setFiltro('todos')
+    setBusca('')
+    selecionar(pedido)
+    setAvisoCriado(`Pedido ${numeroPedido(pedido)} criado.`)
+    recarregar()
+  }
+
   return (
     <div className="dashboard">
       <Sidebar ativo="pedidos" pedidosAbertos={abertos} onNavegar={onNavegar} onSair={onSair} />
@@ -268,10 +281,19 @@ function Pedidos({ usuario, onNavegar, onSair }) {
               ))}
             </div>
 
-            <button type="button" className="col-adicionar" title="Em breve">
+            <button type="button" className="col-adicionar" onClick={() => setNovoAberto(true)}>
               + Novo pedido
             </button>
           </div>
+
+          {avisoCriado && (
+            <div className="col-aviso ped-aviso-ok" role="status">
+              {avisoCriado}
+              <button type="button" onClick={() => setAvisoCriado('')}>
+                Fechar
+              </button>
+            </div>
+          )}
 
           {carregando && <p className="col-aviso">Carregando pedidos...</p>}
 
@@ -360,6 +382,8 @@ function Pedidos({ usuario, onNavegar, onSair }) {
           )}
         </main>
       </div>
+
+      {novoAberto && <NovoPedido onCriado={pedidoCriado} onFechar={() => setNovoAberto(false)} />}
     </div>
   )
 }
