@@ -1,5 +1,3 @@
-import { DOCA } from '../../utils/rota'
-
 // Desenho da planta com a rota do pedido, a partir das coordenadas das posições cadastradas.
 // Todas as posições do armazém aparecem como pequenos quadrados; as do pedido viram paradas numeradas.
 // O caminho anda primeiro na horizontal e depois na vertical, como pelos corredores.
@@ -15,9 +13,9 @@ function limites(pontos) {
   return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
 }
 
-// `doca` é o ponto da expedição; vem da API (dock) e, sem ela, fica na origem da planta.
+// `doca` é o ponto da expedição, que vem da API (dock) junto com a rota.
 // `empilhadeira` ({ paradas, feitas }) é a rota própria dos itens grandes (RN04), desenhada em outra cor.
-function MapaRota({ posicoes, paradas, feitas, concluido, doca = DOCA, empilhadeira = null }) {
+function MapaRota({ posicoes, paradas, feitas, concluido, doca, empilhadeira = null }) {
   const paradasEmpilhadeira = empilhadeira?.paradas ?? []
   const pontosDaPlanta = [
     doca,

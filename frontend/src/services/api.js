@@ -145,3 +145,49 @@ export function listarCorredores() {
 export function criarCorredor(corpo) {
   return requisicao('/aisles', 'POST', corpo)
 }
+
+export function buscarDashboard() {
+  return requisicao('/dashboard')
+}
+
+// datas no formato AAAA-MM-DD
+export function buscarRelatorio(de, ate) {
+  return requisicao(`/reports?from=${de}&to=${ate}`)
+}
+
+// Divergências de bipagem. `abertas` = só as de pedidos ainda não concluídos.
+export function listarDivergencias({ desde, abertas } = {}) {
+  const filtros = new URLSearchParams()
+  if (desde) filtros.set('from', desde)
+  if (abertas) filtros.set('open', '1')
+  const texto = filtros.toString()
+  return requisicao(`/scan-events${texto ? `?${texto}` : ''}`)
+}
+
+export function listarPedidosPorStatus(status) {
+  return requisicao(`/orders?status=${status}`)
+}
+
+export function buscarConfiguracoes() {
+  return requisicao('/settings')
+}
+
+export function salvarConfiguracoes(corpo) {
+  return requisicao('/settings', 'PUT', corpo)
+}
+
+export function listarUsuarios() {
+  return requisicao('/users')
+}
+
+export function criarUsuario(corpo) {
+  return requisicao('/users', 'POST', corpo)
+}
+
+export function editarUsuario(id, corpo) {
+  return requisicao(`/users/${id}`, 'PUT', corpo)
+}
+
+export function excluirUsuario(id) {
+  return requisicao(`/users/${id}`, 'DELETE')
+}

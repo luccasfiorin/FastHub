@@ -29,4 +29,9 @@ class ScanEvent extends Model
     {
         return $this->belongsTo(Order::class);
     }
+
+    public function orderItem(): BelongsTo
+    {
+        return $this->belongsTo(OrderItem::class);
+    }
 }

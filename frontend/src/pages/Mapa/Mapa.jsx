@@ -1,25 +1,23 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Sidebar from '../../components/Sidebar'
 import Header from '../../components/Header'
 import Icone from '../../components/Icone'
 import PlantaArmazem from './PlantaArmazem'
+import { corDoColetor, faixasOcupacao, montarPlanta, montarPosicoes } from './planta'
 import {
-  AREA,
-  NIVEIS_POR_ESTANTE,
-  PLANTA,
-  coletoresExemplo,
-  corDoColetor,
-  divergencias,
-  emMetros,
-  faixasOcupacao,
-  lerCodigo,
-  posicoes,
-} from './dadosMapa'
-import { calcularRota } from '../../utils/rota'
+  buscarConfiguracoes,
+  buscarRotaPedido,
+  listarColetores,
+  listarDivergencias,
+  listarPedidosPorStatus,
+  listarPosicoes,
+  listarProdutos,
+} from '../../services/api'
+import { formatarHora } from '../../utils/formatar'
 import './Mapa.css'
 
-// Por enquanto a tela usa dados de exemplo (dadosMapa.js).
-// As rotas são calculadas com o mesmo algoritmo da tela de Pedidos (vizinho mais próximo).
+// Mapa do armazém com dados do banco: posições, produtos guardados, divergências abertas
+// e a rota (calculada no backend) de cada pedido em andamento. Atualiza a cada 30 s.
 
 const camadasDoMapa = [
   { id: 'ocupacao', nome: 'Ocupação', icone: 'camadas' },
@@ -29,86 +27,221 @@ const camadasDoMapa = [
 ]
 
 const nomesFaixa = {
-  vazia: 'Posição vazia',
-  baixa: 'Ocupação baixa',
-  media: 'Ocupação média',
-  cheia: 'Posição cheia',
+  vazia: 'Sem produto',
+  cheia: 'Com produto',
+}
+
+// Parada da rota da API para o formato da planta ({ corredor, posicao }).
+function paradasDaRota(rota, corredores) {
+  return rota.stops.map((stop) => ({
+    codigo: stop.code,
+    coletada: stop.picked,
+    local: { corredor: corredores.indexOf(stop.aisle), posicao: Number(stop.position) },
+  }))
 }
 
 // Coletores com pedido aberto: quem já começou aparece na última posição coletada,
-// quem ainda não saiu fica aguardando na doca.
-function montarColetores() {
-  const coletores = coletoresExemplo.map((coletor, i) => {
-    const paradas = coletor.paradas.map((p) => {
-      const local = lerCodigo(p.codigo)
-      return { ...p, local, ponto: emMetros(local), coletada: Boolean(p.coletadaEm) }
-    })
-    const rota = calcularRota(paradas)
-    const feitas = rota.paradas.filter((p) => p.coletada).length
+// quem ainda não saiu (pedido atribuído e não iniciado) fica aguardando na doca.
+async function buscarColetoresNoMapa(corredores, tiposPorColetor) {
+  const [emAndamento, pendentes] = await Promise.all([
+    listarPedidosPorStatus('in_progress'),
+    listarPedidosPorStatus('pending'),
+  ])
 
-    return {
-      pedido: coletor.pedido,
-      nome: coletor.nome,
-      paradas: rota.paradas,
-      feitas,
-      aguardando: feitas === 0,
-      cor: corDoColetor(coletor.nome, i),
-    }
-  })
+  const andando = await Promise.all(
+    emAndamento
+      .filter((p) => p.picker)
+      .map(async (pedido) => {
+        const rota = await buscarRotaPedido(pedido.id)
+        // operador de empilhadeira segue a rota dos itens grandes; os demais, a rota a pé
+        const usaEmpilhadeira = tiposPorColetor.get(pedido.picker.id) === 'forklift' && rota.forklift_route
+        const trecho = usaEmpilhadeira ? rota.forklift_route : rota
+        return {
+          pedido: pedido.order_number,
+          nome: pedido.picker.name,
+          paradas: paradasDaRota(trecho, corredores),
+          feitas: trecho.picked_stops,
+          aguardando: false,
+        }
+      }),
+  )
+
+  const naDoca = pendentes
+    .filter((p) => p.picker)
+    .map((pedido) => ({ pedido: pedido.order_number, nome: pedido.picker.name, paradas: [], feitas: 0, aguardando: true }))
+
+  const todos = [...andando, ...naDoca].map((c, i) => ({ ...c, cor: corDoColetor(i) }))
 
   // afasta um pouco as linhas de cada coletor para não ficarem uma em cima da outra
-  const andando = coletores.filter((c) => !c.aguardando)
-  return coletores.map((c) => {
-    const indice = andando.indexOf(c)
-    return { ...c, desvio: indice < 0 ? 0 : (indice - (andando.length - 1) / 2) * 5 }
+  const emRota = todos.filter((c) => !c.aguardando)
+  return todos.map((c) => {
+    const indice = emRota.indexOf(c)
+    return { ...c, desvio: indice < 0 ? 0 : (indice - (emRota.length - 1) / 2) * 5 }
   })
 }
 
-const coletoresNoMapa = montarColetores()
-const ocupadas = posicoes.filter((p) => p.ocupacao > 0).length
-const percentualOcupado = Math.round((ocupadas / posicoes.length) * 100)
+function useMapa() {
+  const [dados, setDados] = useState(null)
+  const [erro, setErro] = useState('')
+  const [versao, setVersao] = useState(0)
 
-const alertasDoTopo = divergencias.map((d) => ({
-  id: d.codigo,
-  text: `Divergência de lote em ${d.codigo} · pedido #${d.pedido}`,
-  at: d.registradaEm,
-}))
+  useEffect(() => {
+    let ativo = true
+
+    async function buscar() {
+      try {
+        const [locations, produtos, divergencias, configuracoes, coletores] = await Promise.all([
+          listarPosicoes(),
+          listarProdutos(),
+          listarDivergencias({ abertas: true }),
+          buscarConfiguracoes(),
+          listarColetores(),
+        ])
+        const planta = montarPlanta(locations)
+        const tipos = new Map(coletores.pickers.map((c) => [c.id, c.picker_type]))
+        const noMapa = await buscarColetoresNoMapa(planta.corredores, tipos)
+
+        if (!ativo) return
+        setDados({
+          planta,
+          posicoes: montarPosicoes(locations, produtos, divergencias, planta, configuracoes.settings),
+          divergencias,
+          config: configuracoes.settings,
+          coletores: noMapa,
+        })
+        setErro('')
+      } catch (e) {
+        if (ativo) setErro(e.message)
+      }
+    }
+
+    buscar()
+    const timer = setInterval(buscar, 30000)
+    return () => {
+      ativo = false
+      clearInterval(timer)
+    }
+  }, [versao])
+
+  return { dados, erro, recarregar: () => setVersao((v) => v + 1) }
+}
 
 function formatarAltura(metros) {
   return `${metros.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m`
 }
 
+function textoDivergencia(d) {
+  const quem = d.picker ?? 'O coletor'
+  const produto = d.product ? ` (${d.product})` : ''
+  return `${quem} bipou um código que não confere com o item${produto} do pedido ${d.order_number}, às ${formatarHora(d.at)}.`
+}
+
 function Mapa({ usuario, onNavegar, onSair }) {
+  const { dados, erro, recarregar } = useMapa()
   const [busca, setBusca] = useState('')
   const [camadas, setCamadas] = useState({ ocupacao: true, rotas: true, coletores: true, alertas: false })
-  const [selecionada, setSelecionada] = useState('B-14')
-  const [rotaSelecionada, setRotaSelecionada] = useState('4822')
+  const [selecionadaId, setSelecionadaId] = useState(null)
+  const [rotaEscolhida, setRotaEscolhida] = useState(null)
 
-  const posicao = posicoes.find((p) => p.codigo === selecionada)
   const termo = busca.trim().toLowerCase()
+
+  const alertasDoTopo = useMemo(
+    () =>
+      (dados?.divergencias ?? []).map((d) => ({
+        id: d.id,
+        text: `Divergência em ${d.location ?? 'posição não informada'} · pedido ${d.order_number}`,
+        at: d.at,
+      })),
+    [dados],
+  )
 
   function alternarCamada(id) {
     setCamadas((atual) => ({ ...atual, [id]: !atual[id] }))
   }
+
+  const area = dados?.config.warehouse_name ?? ''
+  const subtitulo = dados
+    ? `${area} · ${dados.planta.corredores.length} corredores · ${dados.posicoes.length} posições`
+    : 'Carregando...'
+
+  const cabecalho = (
+    <Header
+      titulo="Mapa do armazém"
+      subtitulo={subtitulo}
+      usuario={usuario}
+      busca={busca}
+      onBusca={setBusca}
+      alertas={alertasDoTopo}
+    />
+  )
+
+  if (!dados) {
+    return (
+      <div className="dashboard">
+        <Sidebar ativo="mapa" onNavegar={onNavegar} onSair={onSair} />
+        <div className="dash-principal">
+          {cabecalho}
+          <main className="dash-conteudo">
+            {erro ? (
+              <div className="col-aviso erro">
+                {erro}
+                <button type="button" onClick={recarregar}>
+                  Tentar de novo
+                </button>
+              </div>
+            ) : (
+              <p className="col-aviso">Carregando o mapa...</p>
+            )}
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  const { planta, posicoes, divergencias, coletores } = dados
+
+  if (posicoes.length === 0) {
+    return (
+      <div className="dashboard">
+        <Sidebar ativo="mapa" onNavegar={onNavegar} onSair={onSair} />
+        <div className="dash-principal">
+          {cabecalho}
+          <main className="dash-conteudo">
+            <div className="col-vazio">
+              <strong>Nenhuma posição cadastrada</strong>
+              <p>Cadastre corredores e posições para ver a planta do armazém.</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  const padrao = posicoes.find((p) => p.divergencia) ?? posicoes.find((p) => p.ocupada) ?? posicoes[0]
+  const posicao = posicoes.find((p) => p.id === selecionadaId) ?? padrao
+  const rotaSelecionada = coletores.some((c) => c.pedido === rotaEscolhida)
+    ? rotaEscolhida
+    : (coletores.find((c) => !c.aguardando)?.pedido ?? null)
+
+  const ocupadas = posicoes.filter((p) => p.ocupada).length
+  const percentualOcupado = Math.round((ocupadas / posicoes.length) * 100)
 
   return (
     <div className="dashboard">
       <Sidebar ativo="mapa" onNavegar={onNavegar} onSair={onSair} />
 
       <div className="dash-principal">
-        <Header
-          titulo="Mapa do armazém"
-          subtitulo={`${AREA} · ${PLANTA.corredores.length} corredores · ${posicoes.length} posições`}
-          usuario={usuario}
-          busca={busca}
-          onBusca={setBusca}
-          alertas={alertasDoTopo}
-        />
+        {cabecalho}
 
         <main className="dash-conteudo">
-          <div className="col-aviso demo">
-            Prévia com dados de exemplo. A ocupação vai usar a API quando existir o estoque por posição.
-          </div>
+          {erro && (
+            <div className="col-aviso erro">
+              Não foi possível atualizar agora: {erro}
+              <button type="button" onClick={recarregar}>
+                Tentar de novo
+              </button>
+            </div>
+          )}
 
           <div className="arm-barra">
             <div className="arm-camadas" role="group" aria-label="Camadas do mapa">
@@ -129,13 +262,13 @@ function Mapa({ usuario, onNavegar, onSair }) {
             <div className="arm-barra-direita">
               <label className="arm-area">
                 <span>Área:</span>
-                <select defaultValue={AREA}>
-                  <option value={AREA}>{AREA}</option>
+                <select value={area} onChange={() => {}}>
+                  <option value={area}>{area}</option>
                 </select>
               </label>
               <button type="button" className="arm-btn-secundario" onClick={() => onNavegar('configuracoes')}>
                 <Icone nome="editar" tamanho={15} />
-                Editar planta
+                Configurações
               </button>
             </div>
           </div>
@@ -144,17 +277,18 @@ function Mapa({ usuario, onNavegar, onSair }) {
             <section className="dash-card arm-mapa-card">
               <div className="arm-mapa-topo">
                 <h2>Visão em planta</h2>
-                <span className="arm-atualizado">Atualizado agora</span>
+                <span className="arm-atualizado">Atualiza a cada 30 s</span>
               </div>
 
               <PlantaArmazem
+                planta={planta}
                 posicoes={posicoes}
-                selecionada={selecionada}
-                onSelecionar={setSelecionada}
+                selecionada={posicao.id}
+                onSelecionar={setSelecionadaId}
                 camadas={camadas}
-                coletores={coletoresNoMapa}
+                coletores={coletores}
                 rotaSelecionada={rotaSelecionada}
-                onSelecionarRota={setRotaSelecionada}
+                onSelecionarRota={setRotaEscolhida}
                 termo={termo}
               />
 
@@ -178,7 +312,7 @@ function Mapa({ usuario, onNavegar, onSair }) {
                 {posicao.divergencia ? (
                   <span className="arm-selo perigo">
                     <Icone nome="aviso" tamanho={13} />
-                    Divergência de lote
+                    Divergência na bipagem
                   </span>
                 ) : (
                   <span className={`arm-selo ${posicao.faixa}`}>{nomesFaixa[posicao.faixa]}</span>
@@ -186,9 +320,13 @@ function Mapa({ usuario, onNavegar, onSair }) {
 
                 <dl className="arm-detalhes">
                   <div>
+                    <dt>Código</dt>
+                    <dd>{posicao.codigo}</dd>
+                  </div>
+                  <div>
                     <dt>Nível</dt>
                     <dd>
-                      {posicao.nivel} de {NIVEIS_POR_ESTANTE}
+                      {posicao.nivel == null ? '—' : `${posicao.nivel} de ${dados.config.levels_per_rack}`}
                     </dd>
                   </div>
                   <div>
@@ -196,49 +334,38 @@ function Mapa({ usuario, onNavegar, onSair }) {
                     <dd>{formatarAltura(posicao.altura)}</dd>
                   </div>
                   <div>
-                    <dt>Ocupação</dt>
-                    <dd>{posicao.ocupacao}%</dd>
-                  </div>
-                  <div>
-                    <dt>Último inventário</dt>
-                    <dd>{posicao.ultimoInventario}</dd>
+                    <dt>Produtos</dt>
+                    <dd>{posicao.produtos.length}</dd>
                   </div>
                 </dl>
 
                 <h3>Produtos nesta posição</h3>
                 {posicao.produtos.length === 0 ? (
-                  <p className="arm-sem-produtos">Nenhum produto guardado aqui.</p>
+                  <p className="arm-sem-produtos">Nenhum produto cadastrado nesta posição.</p>
                 ) : (
                   <ul className="arm-produtos">
                     {posicao.produtos.map((produto) => (
-                      <li key={`${produto.nome}-${produto.lote}`}>
+                      <li key={produto.id}>
                         <div>
                           <strong>{produto.nome}</strong>
-                          <small>Lote {produto.lote}</small>
+                          <small>
+                            SKU {produto.sku}
+                            {produto.lote ? ` · Lote ${produto.lote}` : ''}
+                          </small>
                         </div>
-                        <span>{produto.quantidade} un</span>
                       </li>
                     ))}
                   </ul>
                 )}
-
-                <div className="arm-posicao-acoes">
-                  <button type="button" className="arm-btn-secundario" title="Em breve">
-                    Ver histórico
-                  </button>
-                  <button type="button" className="arm-btn-principal" title="Em breve">
-                    Abrir inventário
-                  </button>
-                </div>
               </section>
 
               {divergencias.map((d) => (
-                <section key={d.codigo} className="dash-card arm-alerta">
+                <section key={d.id} className="dash-card arm-alerta">
                   <strong>
                     <Icone nome="aviso" tamanho={16} />
-                    Divergência na bipagem
+                    Divergência na bipagem{d.location ? ` · ${d.location}` : ''}
                   </strong>
-                  <p>{d.texto}</p>
+                  <p>{textoDivergencia(d)}</p>
                   <button type="button" className="dash-chip perigo" onClick={() => onNavegar('relatorios')}>
                     Ver ocorrência
                   </button>
@@ -246,10 +373,10 @@ function Mapa({ usuario, onNavegar, onSair }) {
               ))}
 
               <section className="dash-card arm-ocupacao">
-                <span className="arm-rotulo">Ocupação geral</span>
+                <span className="arm-rotulo">Posições com produto</span>
                 <strong>{percentualOcupado}%</strong>
                 <small>
-                  {ocupadas} de {posicoes.length} posições ocupadas
+                  {ocupadas} de {posicoes.length} posições têm produto cadastrado
                 </small>
                 <div className="arm-ocupacao-barra">
                   <span style={{ width: `${percentualOcupado}%` }} />

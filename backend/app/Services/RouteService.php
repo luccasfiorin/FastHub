@@ -12,7 +12,7 @@ use Illuminate\Support\Collection;
  * Recebe o pedido e devolve a ordem das posições a visitar, saindo da expedição
  * e voltando para ela, junto com as distâncias e o caminho pronto para desenhar no mapa.
  *
- * Regras (as mesmas de frontend/src/utils/rota.js):
+ * Regras:
  * - Cada parada é uma posição (locations) com coord_x e coord_y em metros.
  *   Itens do mesmo pedido na mesma posição viram uma parada só.
  * - O coletor anda pelos corredores, então a distância entre dois pontos é
@@ -97,6 +97,52 @@ class RouteService
             'forklift_route' => $rotaGrandes,
             'unlocated_items' => $semPosicao->map(fn (OrderItem $item) => $this->item($item))->values()->all(),
         ];
+    }
+
+    /**
+     * Distância total do pedido em duas versões, para medir o ganho da roteirização:
+     * - optimized_m: a rota do FastHub (a pé + empilhadeira), saindo e voltando à expedição;
+     * - list_order_m: o mesmo percurso visitando as posições na ordem em que os itens
+     *   aparecem no pedido, como numa lista de papel sem ordenação.
+     *
+     * @return array{optimized_m: float, list_order_m: float}
+     */
+    public function distances(Order $order): array
+    {
+        $rota = $this->forOrder($order);
+        $otimizada = $rota['total_distance_m'] + ($rota['forklift_route']['total_distance_m'] ?? 0);
+
+        $dock = $this->dock();
+        $comPosicao = $order->items->filter(fn (OrderItem $item) => $item->location !== null)->sortBy('id');
+        [$grandes, $aPe] = $comPosicao->partition(fn (OrderItem $item) => $this->ehGrande($item));
+
+        $lista = 0.0;
+        foreach ([$aPe, $grandes] as $grupo) {
+            $pontos = $grupo->unique('location_id')
+                ->map(fn (OrderItem $item) => ['x' => (float) $item->location->coord_x, 'y' => (float) $item->location->coord_y])
+                ->values()
+                ->all();
+            $lista += $this->percurso($dock, $pontos);
+        }
+
+        return ['optimized_m' => round($otimizada, 2), 'list_order_m' => round($lista, 2)];
+    }
+
+    /** Distância de expedição → pontos na ordem dada → expedição. Sem pontos, zero. */
+    private function percurso(array $dock, array $pontos): float
+    {
+        if ($pontos === []) {
+            return 0.0;
+        }
+
+        $total = 0.0;
+        $anterior = $dock;
+        foreach ($pontos as $ponto) {
+            $total += $this->distancia($anterior, $ponto);
+            $anterior = $ponto;
+        }
+
+        return $total + $this->distancia($anterior, $dock);
     }
 
     /**

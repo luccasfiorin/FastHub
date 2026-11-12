@@ -1,27 +1,41 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Icone from '../../components/Icone'
 import Sidebar from '../../components/Sidebar'
-import MapaArmazem from './MapaArmazem'
+import MapaRota from '../Pedidos/MapaRota'
 import GraficoPedidos from './GraficoPedidos'
-import {
-  indicadores,
-  pedidos,
-  nomesStatus,
-  filtros,
-  coletores,
-  nomesEstado,
-  alertas,
-  eficienciaRota,
-} from './dados'
+import { useDashboard } from '../../hooks/useDashboard'
+import { buscarRotaPedido } from '../../services/api'
+import { formatarHora, formatarPercentual, iniciais, semDado } from '../../utils/formatar'
+import { posicoesDaApi, rotaDaApi } from '../../utils/rotaApi'
 import './Dashboard.css'
+import '../Pedidos/Pedidos.css'
+
+// Tela Início: todos os dados vêm da API (useDashboard).
+
+const filtros = [
+  { id: 'todos', nome: 'Todos' },
+  { id: 'andamento', nome: 'Em andamento' },
+  { id: 'aguardando', nome: 'Aguardando' },
+  { id: 'concluido', nome: 'Concluídos hoje' },
+]
+
+const nomesStatus = {
+  concluido: 'Concluído',
+  andamento: 'Em andamento',
+  iniciado: 'Iniciado',
+  aguardando: 'Aguardando',
+  neutro: 'Sem coletor',
+}
+
+const nomesEstado = { active: 'Ativo', paused: 'Em pausa', offline: 'Offline' }
+const classesEstado = { active: 'ativo', paused: 'pausa', offline: 'offline' }
+
+// ordem da tabela: em andamento, aguardando, concluídos
+const ordemStatus = { in_progress: 0, pending: 1, completed: 2 }
 
 function dataDeHoje() {
   const agora = new Date()
-  const texto = agora.toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
+  const texto = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
   const hora = agora.getHours()
   let turno = 'Turno da noite'
   if (hora >= 6 && hora < 12) turno = 'Turno da manhã'
@@ -30,36 +44,205 @@ function dataDeHoje() {
   return `${texto.charAt(0).toUpperCase()}${texto.slice(1)} · ${turno}`
 }
 
-function Dashboard({ onNavegar, onSair }) {
+function ehHoje(iso) {
+  if (!iso) return false
+  return new Date(iso).toDateString() === new Date().toDateString()
+}
+
+function numeroPedido(pedido) {
+  return /^\d+$/.test(pedido.order_number) ? `#${pedido.order_number}` : pedido.order_number
+}
+
+// Linha da tabela a partir do pedido da API.
+function linhaDoPedido(pedido) {
+  const total = pedido.items.reduce((soma, i) => soma + i.quantity, 0)
+  const coletados = pedido.items.reduce((soma, i) => soma + Math.min(i.picked_quantity, i.quantity), 0)
+  const progresso = total ? Math.round((coletados / total) * 100) : 0
+
+  let status = 'aguardando'
+  if (pedido.status === 'completed') status = 'concluido'
+  else if (pedido.status === 'in_progress') status = coletados > 0 ? 'andamento' : 'iniciado'
+  else if (!pedido.picker) status = 'neutro'
+
+  return {
+    id: pedido.id,
+    numero: numeroPedido(pedido),
+    coletor: pedido.picker?.name ?? 'Sem coletor',
+    empilhadeira: Boolean(pedido.requires_forklift),
+    itens: total,
+    progresso,
+    status,
+    inicio: pedido.started_at ? formatarHora(pedido.started_at) : semDado,
+    pedido,
+  }
+}
+
+// "+12% vs ontem"; sem base de comparação, devolve null.
+function variacaoPercentual(atual, anterior) {
+  if (!anterior) return null
+  return Math.round(((atual - anterior) / anterior) * 100)
+}
+
+function montarIndicadores(ind) {
+  const hoje = ind.today
+  const ontem = ind.yesterday
+
+  const variacao = variacaoPercentual(hoje.orders, ontem.orders)
+  let detalhePedidos = 'Nenhum pedido ontem até este horário'
+  if (variacao !== null) {
+    detalhePedidos = variacao === 0 ? 'Igual a ontem neste horário' : `${variacao > 0 ? '+' : '−'}${Math.abs(variacao)}% vs ontem`
+  }
+
+  let detalheRitmo = 'Sem bipagens hoje'
+  let ritmoPositivo = false
+  if (hoje.seconds_per_item != null && ontem.seconds_per_item != null) {
+    const diferenca = Math.round(hoje.seconds_per_item - ontem.seconds_per_item)
+    ritmoPositivo = diferenca <= 0
+    detalheRitmo = diferenca === 0 ? 'Igual a ontem' : `${diferenca > 0 ? '+' : '−'}${Math.abs(diferenca)} s vs ontem`
+  } else if (hoje.seconds_per_item != null) {
+    detalheRitmo = 'Sem dados de ontem para comparar'
+  }
+
+  return [
+    {
+      titulo: 'Pedidos separados hoje',
+      icone: 'caixa',
+      valor: String(hoje.orders),
+      detalhe: detalhePedidos,
+      positivo: variacao !== null && variacao >= 0,
+    },
+    {
+      titulo: 'Em andamento',
+      icone: 'andamento',
+      valor: String(ind.in_progress),
+      detalhe: `${ind.active_pickers} ${ind.active_pickers === 1 ? 'coletor ativo' : 'coletores ativos'} · ${ind.pending} aguardando`,
+    },
+    {
+      titulo: 'Pick rate',
+      icone: 'relogio',
+      valor: hoje.seconds_per_item == null ? semDado : `${Math.round(hoje.seconds_per_item)} s/item`,
+      detalhe: detalheRitmo,
+      positivo: ritmoPositivo,
+    },
+    {
+      titulo: 'Acurácia',
+      icone: 'alvo',
+      valor: formatarPercentual(hoje.accuracy),
+      detalhe:
+        hoje.scans === 0
+          ? 'Sem bipagens hoje'
+          : `${hoje.mismatches} ${hoje.mismatches === 1 ? 'divergência' : 'divergências'} em ${hoje.scans} bipagens`,
+      positivo: hoje.mismatches === 0 && hoje.scans > 0,
+      destaque: true,
+    },
+  ]
+}
+
+// Rota do pedido escolhido, calculada no backend.
+function useRota(pedidoId, atualizacao) {
+  const [resposta, setResposta] = useState(null)
+
+  useEffect(() => {
+    if (!pedidoId) return undefined
+    let ativo = true
+    buscarRotaPedido(pedidoId)
+      .then((dados) => ativo && setResposta(dados))
+      .catch(() => ativo && setResposta(null))
+    return () => {
+      ativo = false
+    }
+  }, [pedidoId, atualizacao])
+
+  return resposta && resposta.order_id === pedidoId ? rotaDaApi(resposta) : null
+}
+
+function Dashboard({ usuario, onNavegar, onSair }) {
+  const { dados, posicoes: posicoesApi, carregando, erro, recarregar } = useDashboard()
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState('todos')
-  const [selecionado, setSelecionado] = useState('#4822')
+  const [selecionadoId, setSelecionadoId] = useState(null)
   const [alertasAbertos, setAlertasAbertos] = useState(false)
-  const [rotaLiberada, setRotaLiberada] = useState(false)
 
-  const termo = busca.trim().toLowerCase()
-  const pedidosFiltrados = pedidos.filter((pedido) => {
+  const posicoes = useMemo(() => posicoesDaApi(posicoesApi), [posicoesApi])
+
+  const linhas = useMemo(() => {
+    if (!dados) return []
+    return dados.pedidos
+      .filter((p) => p.status === 'in_progress' || p.status === 'pending' || (p.status === 'completed' && ehHoje(p.completed_at)))
+      .sort((a, b) => ordemStatus[a.status] - ordemStatus[b.status] || b.id - a.id)
+      .map(linhaDoPedido)
+  }, [dados])
+
+  const termo = busca.trim().toLowerCase().replace('#', '')
+  const candidatas = linhas.filter((linha) => {
     const passaFiltro =
       filtro === 'todos' ||
-      pedido.status === filtro ||
-      (filtro === 'andamento' && pedido.status === 'iniciado')
+      linha.status === filtro ||
+      (filtro === 'andamento' && linha.status === 'iniciado') ||
+      (filtro === 'aguardando' && linha.status === 'neutro')
     const passaBusca =
-      !termo ||
-      pedido.numero.toLowerCase().includes(termo) ||
-      pedido.coletor.toLowerCase().includes(termo)
+      !termo || linha.numero.toLowerCase().includes(termo) || linha.coletor.toLowerCase().includes(termo)
     return passaFiltro && passaBusca
   })
+  // em "Todos" sem busca, mostra os abertos e só os últimos concluídos; a lista completa fica no filtro próprio
+  const concluidosVisiveis = 5
+  let concluidosMostrados = 0
+  const filtradas = candidatas.filter((linha) => {
+    if (filtro !== 'todos' || termo || linha.status !== 'concluido') return true
+    concluidosMostrados += 1
+    return concluidosMostrados <= concluidosVisiveis
+  })
 
-  const pedidoNoMapa = pedidos.find((pedido) => pedido.numero === selecionado)
+  const selecionada = linhas.find((l) => l.id === selecionadoId) ?? filtradas[0] ?? linhas[0] ?? null
+  const rota = useRota(selecionada?.id ?? null, dados)
+
+  if (carregando && !dados) {
+    return (
+      <div className="dashboard">
+        <Sidebar ativo="inicio" onNavegar={onNavegar} onSair={onSair} />
+        <div className="dash-principal">
+          <main className="dash-conteudo">
+            <p className="col-aviso">Carregando a operação de hoje...</p>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  if (!dados) {
+    return (
+      <div className="dashboard">
+        <Sidebar ativo="inicio" onNavegar={onNavegar} onSair={onSair} />
+        <div className="dash-principal">
+          <main className="dash-conteudo">
+            <div className="col-aviso erro">
+              {erro || 'Não foi possível carregar os dados.'}
+              <button type="button" onClick={recarregar}>
+                Tentar de novo
+              </button>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  const { indicadores: ind, coletores } = dados
+  const cards = montarIndicadores(ind)
+  const alertas = coletores.alerts
+  const abertos = coletores.open_orders
+  const economia = ind.today.saving_percent
+  const divergencia = ind.latest_mismatch
+  const primeiroNome = usuario?.name?.split(' ')[0] ?? ''
 
   return (
     <div className="dashboard">
-      <Sidebar ativo="inicio" onNavegar={onNavegar} onSair={onSair} />
+      <Sidebar ativo="inicio" pedidosAbertos={abertos} onNavegar={onNavegar} onSair={onSair} />
 
       <div className="dash-principal">
         <header className="dash-topo">
           <div>
-            <h1>Olá, Luiz</h1>
+            <h1>Olá, {primeiroNome}</h1>
             <p>{dataDeHoje()}</p>
           </div>
 
@@ -68,7 +251,7 @@ function Dashboard({ onNavegar, onSair }) {
               <Icone nome="busca" tamanho={16} />
               <input
                 type="search"
-                placeholder="Buscar pedido, SKU ou coletor..."
+                placeholder="Buscar pedido ou coletor..."
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
               />
@@ -77,55 +260,64 @@ function Dashboard({ onNavegar, onSair }) {
             <div className="dash-alerta-area">
               <button
                 type="button"
-                className="dash-alerta"
+                className={`dash-alerta col-sino ${alertas.length ? 'com-alerta' : ''}`}
                 aria-label="Alertas"
                 aria-expanded={alertasAbertos}
                 onClick={() => setAlertasAbertos(!alertasAbertos)}
               >
-                !
+                <Icone nome="sino" tamanho={18} />
               </button>
 
               {alertasAbertos && (
                 <div className="dash-alertas">
-                  <strong>Alertas recentes</strong>
-                  <ul>
-                    {alertas.map((alerta) => (
-                      <li key={alerta.texto}>
-                        <span className={`dash-alertas-icone ${alerta.tipo}`}>
-                          <Icone nome={alerta.tipo === 'info' ? 'info' : 'aviso'} tamanho={14} />
-                        </span>
-                        <div>
-                          <p>{alerta.texto}</p>
-                          <small>{alerta.tempo}</small>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                  <strong>Alertas de hoje</strong>
+                  {alertas.length === 0 ? (
+                    <p className="col-alertas-vazio">Nenhuma divergência registrada hoje.</p>
+                  ) : (
+                    <ul>
+                      {alertas.map((alerta) => (
+                        <li key={alerta.id}>
+                          <span className="dash-alertas-icone erro">
+                            <Icone nome="aviso" tamanho={14} />
+                          </span>
+                          <div>
+                            <p>{alerta.text}</p>
+                            <small>às {formatarHora(alerta.at)}</small>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>
 
             <div className="dash-usuario">
-              <span className="dash-avatar">LA</span>
+              <span className="dash-avatar">{usuario ? iniciais(usuario.name) : ''}</span>
               <div>
-                <strong>Luiz A.</strong>
-                <small>Gestor de estoque</small>
+                <strong>{usuario?.name}</strong>
+                <small>{usuario?.job_title ?? 'Gestor'}</small>
               </div>
             </div>
           </div>
         </header>
 
         <main className="dash-conteudo">
+          {erro && (
+            <div className="col-aviso erro">
+              Não foi possível atualizar agora: {erro}
+              <button type="button" onClick={recarregar}>
+                Tentar de novo
+              </button>
+            </div>
+          )}
+
           <div className="dash-titulo">
             <h2>Visão geral da operação</h2>
-            <button type="button" className="dash-btn-importar">
-              <Icone nome="importar" tamanho={16} />
-              Importar pedidos do ERP
-            </button>
           </div>
 
           <section className="dash-indicadores">
-            {indicadores.map((card) => (
+            {cards.map((card) => (
               <article key={card.titulo} className="dash-card dash-indicador">
                 <div className="dash-indicador-topo">
                   <span className={`dash-indicador-icone ${card.destaque ? 'destaque' : ''}`}>
@@ -142,8 +334,14 @@ function Dashboard({ onNavegar, onSair }) {
           <div className="dash-meio">
             <section className="dash-card dash-pedidos">
               <div className="dash-pedidos-topo">
-                <h3>Pedidos em andamento</h3>
-                <a href="#">
+                <h3>Pedidos de hoje</h3>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    onNavegar('pedidos')
+                  }}
+                >
                   Ver todos <Icone nome="seta" tamanho={14} />
                 </a>
               </div>
@@ -172,51 +370,48 @@ function Dashboard({ onNavegar, onSair }) {
                       <th>Itens</th>
                       <th>Progresso</th>
                       <th>Status</th>
-                      <th>ETA</th>
+                      <th>Início</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pedidosFiltrados.map((pedido) => (
+                    {filtradas.map((linha) => (
                       <tr
-                        key={pedido.numero}
-                        className={pedido.numero === selecionado ? 'selecionado' : ''}
-                        onClick={() => setSelecionado(pedido.numero)}
+                        key={linha.id}
+                        className={linha.id === selecionada?.id ? 'selecionado' : ''}
+                        onClick={() => setSelecionadoId(linha.id)}
                         title="Ver rota no mapa"
                       >
-                        <td className="dash-numero">{pedido.numero}</td>
+                        <td className="dash-numero">{linha.numero}</td>
                         <td>
                           <span className="dash-coletor">
                             <span className="dash-coletor-icone">
-                              <Icone
-                                nome={pedido.tipo === 'empilhadeira' ? 'empilhadeira' : 'usuario'}
-                                tamanho={14}
-                              />
+                              <Icone nome={linha.empilhadeira ? 'empilhadeira' : 'usuario'} tamanho={14} />
                             </span>
-                            {pedido.coletor}
+                            {linha.coletor}
                           </span>
                         </td>
-                        <td className="dash-cinza">{pedido.itens}</td>
+                        <td className="dash-cinza">{linha.itens}</td>
                         <td>
                           <div className="dash-progresso">
-                            <div className={`dash-barra ${pedido.status}`}>
-                              <span style={{ width: `${pedido.progresso}%` }} />
+                            <div className={`dash-barra ${linha.status}`}>
+                              <span style={{ width: `${linha.progresso}%` }} />
                             </div>
-                            <small>{pedido.progresso}%</small>
+                            <small>{linha.progresso}%</small>
                           </div>
                         </td>
                         <td>
-                          <span className={`dash-status ${pedido.status}`}>
-                            {nomesStatus[pedido.status]}
-                          </span>
+                          <span className={`dash-status ${linha.status}`}>{nomesStatus[linha.status]}</span>
                         </td>
-                        <td>{pedido.eta}</td>
+                        <td>{linha.inicio}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                {pedidosFiltrados.length === 0 && (
-                  <p className="dash-vazio">Nenhum pedido encontrado para essa busca.</p>
+                {filtradas.length === 0 && (
+                  <p className="dash-vazio">
+                    {linhas.length === 0 ? 'Nenhum pedido aberto ou concluído hoje.' : 'Nenhum pedido encontrado para essa busca.'}
+                  </p>
                 )}
               </div>
             </section>
@@ -224,15 +419,27 @@ function Dashboard({ onNavegar, onSair }) {
             <section className="dash-card dash-mapa">
               <div className="dash-mapa-topo">
                 <div>
-                  <h3>Mapa do armazém · rota ativa</h3>
+                  <h3>Mapa do armazém · rota</h3>
                   <p>
-                    Pedido {pedidoNoMapa.numero} · {pedidoNoMapa.coletor} · {pedidoNoMapa.itens}{' '}
-                    itens
+                    {selecionada
+                      ? `Pedido ${selecionada.numero} · ${selecionada.coletor} · ${selecionada.itens} itens`
+                      : 'Nenhum pedido selecionado'}
                   </p>
                 </div>
-                <span className="dash-mapa-ao-vivo">Ao vivo</span>
+                {selecionada?.pedido.status === 'in_progress' && <span className="dash-mapa-ao-vivo">Ao vivo</span>}
               </div>
-              <MapaArmazem pedido={pedidoNoMapa} />
+              {selecionada && rota ? (
+                <MapaRota
+                  posicoes={posicoes}
+                  paradas={rota.paradas}
+                  feitas={rota.feitas}
+                  concluido={selecionada.pedido.status === 'completed'}
+                  doca={rota.doca}
+                  empilhadeira={rota.empilhadeira}
+                />
+              ) : (
+                <p className="dash-vazio">{selecionada ? 'Calculando a rota...' : 'Selecione um pedido para ver a rota.'}</p>
+              )}
             </section>
           </div>
 
@@ -242,18 +449,21 @@ function Dashboard({ onNavegar, onSair }) {
                 <Icone nome="rotas" tamanho={15} />
                 Eficiência de rota
               </span>
-              {eficienciaRota ? (
+              {economia != null ? (
                 <>
-                  <strong>−{eficienciaRota.reducao}% distância percorrida</strong>
-                  <small>Comparado ao roteiro por lista de papel</small>
+                  <strong>
+                    {economia > 0 ? '−' : ''}
+                    {formatarPercentual(Math.abs(economia), 0)} distância percorrida
+                  </strong>
+                  <small>Pedidos de hoje, comparado a seguir a ordem da lista</small>
                   <div className="dash-destaque-barra">
-                    <span style={{ width: `${100 - eficienciaRota.reducao}%` }} />
+                    <span style={{ width: `${Math.max(0, 100 - economia)}%` }} />
                   </div>
                 </>
               ) : (
                 <>
-                  <strong className="dash-sem-dados">—</strong>
-                  <small>Aguardando dados da API</small>
+                  <strong className="dash-sem-dados">{semDado}</strong>
+                  <small>Nenhum pedido concluído hoje</small>
                   <div className="dash-destaque-barra" />
                 </>
               )}
@@ -264,34 +474,37 @@ function Dashboard({ onNavegar, onSair }) {
                 <Icone nome="empilhadeira" tamanho={15} />
                 Rotas com empilhadeira
               </span>
-              <strong>{rotaLiberada ? '2 aguardando' : '3 aguardando'}</strong>
-              <small>Itens acima de 1,5 m agrupados em rota dedicada</small>
-              <button
-                type="button"
-                className={`dash-chip ${rotaLiberada ? 'liberada' : ''}`}
-                onClick={() => setRotaLiberada(true)}
-                disabled={rotaLiberada}
-              >
-                {rotaLiberada ? (
-                  <>
-                    <Icone nome="check" tamanho={14} /> Rota liberada
-                  </>
-                ) : (
-                  'Liberar rota'
-                )}
+              <strong>
+                {ind.forklift_open_orders} {ind.forklift_open_orders === 1 ? 'pedido aberto' : 'pedidos abertos'}
+              </strong>
+              <small>Itens grandes saem em rota própria da empilhadeira</small>
+              <button type="button" className="dash-chip" onClick={() => onNavegar('pedidos')}>
+                Ver pedidos
               </button>
             </article>
 
-            <article className="dash-card dash-destaque alerta">
+            <article className={`dash-card dash-destaque ${divergencia ? 'alerta' : ''}`}>
               <span className="dash-destaque-rotulo">
                 <Icone nome="aviso" tamanho={15} />
                 Alerta de bipagem
               </span>
-              <strong>Divergência de lote</strong>
-              <small>Corredor B, Posição 14 · Pedido #4823</small>
-              <button type="button" className="dash-chip perigo">
-                Ver ocorrência
-              </button>
+              {divergencia ? (
+                <>
+                  <strong>Código divergente</strong>
+                  <small>
+                    {divergencia.location ?? 'Posição não informada'} · Pedido {divergencia.order_number}
+                    {divergencia.picker ? ` · ${divergencia.picker}` : ''} · às {formatarHora(divergencia.at)}
+                  </small>
+                  <button type="button" className="dash-chip perigo" onClick={() => onNavegar('relatorios')}>
+                    Ver ocorrência
+                  </button>
+                </>
+              ) : (
+                <>
+                  <strong>Nenhuma divergência</strong>
+                  <small>Todas as bipagens de hoje conferem</small>
+                </>
+              )}
             </article>
           </div>
 
@@ -303,38 +516,48 @@ function Dashboard({ onNavegar, onSair }) {
                   <span className="dash-bloco-legenda-cor" /> Hora atual
                 </span>
               </div>
-              <GraficoPedidos />
+              <GraficoPedidos porHora={ind.orders_per_hour} />
             </section>
 
             <section className="dash-card dash-bloco">
               <div className="dash-bloco-topo">
                 <h3>Coletores</h3>
-                <a href="#">
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    onNavegar('coletores')
+                  }}
+                >
                   Ver todos <Icone nome="seta" tamanho={14} />
                 </a>
               </div>
 
-              <ul className="dash-coletores">
-                {coletores.map((coletor) => (
-                  <li key={coletor.nome}>
-                    <span className="dash-coletor-icone">
-                      <Icone
-                        nome={coletor.tipo === 'empilhadeira' ? 'empilhadeira' : 'usuario'}
-                        tamanho={14}
-                      />
-                    </span>
-                    <div className="dash-coletores-nome">
-                      <strong>{coletor.nome}</strong>
-                      <small className={`dash-estado ${coletor.estado}`}>
-                        {nomesEstado[coletor.estado]}
-                      </small>
-                    </div>
-                    <span className="dash-coletores-ritmo">
-                      <strong>{coletor.itensHora}</strong> itens/h
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              {coletores.pickers.length === 0 ? (
+                <p className="dash-vazio">Nenhum coletor cadastrado.</p>
+              ) : (
+                <ul className="dash-coletores">
+                  {coletores.pickers.map((coletor) => (
+                    <li key={coletor.id}>
+                      <span className="dash-coletor-icone">
+                        <Icone nome={coletor.picker_type === 'forklift' ? 'empilhadeira' : 'usuario'} tamanho={14} />
+                      </span>
+                      <div className="dash-coletores-nome">
+                        <strong>{coletor.name}</strong>
+                        <small className={`dash-estado ${classesEstado[coletor.status]}`}>
+                          {nomesEstado[coletor.status]}
+                        </small>
+                      </div>
+                      <span className="dash-coletores-ritmo">
+                        <strong>
+                          {coletor.metrics.items_per_hour == null ? semDado : Math.round(coletor.metrics.items_per_hour)}
+                        </strong>{' '}
+                        itens/h
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           </div>
         </main>

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\OrderItem;
 use App\Models\ScanEvent;
+use App\Services\OperationReport;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +24,29 @@ use Illuminate\Support\Facades\DB;
  */
 class ScanEventController extends Controller
 {
+    /**
+     * Divergências de bipagem (GET /scan-events, só gestor), as mais recentes primeiro.
+     * ?open=1 traz só as de pedidos ainda abertos; ?from=AAAA-MM-DD limita a data (padrão: últimos 7 dias).
+     */
+    public function index(Request $request, OperationReport $report): JsonResponse
+    {
+        $dados = $request->validate([
+            'from' => 'nullable|date_format:Y-m-d',
+            'open' => 'nullable|boolean',
+        ]);
+
+        $de = isset($dados['from'])
+            ? CarbonImmutable::parse($dados['from'])->startOfDay()
+            : CarbonImmutable::now()->subDays(6)->startOfDay();
+
+        $lista = $report->occurrences($de, CarbonImmutable::now());
+        if (! empty($dados['open'])) {
+            $lista = array_values(array_filter($lista, fn ($o) => $o['status'] === 'open'));
+        }
+
+        return response()->json($lista);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $dados = $request->validate([

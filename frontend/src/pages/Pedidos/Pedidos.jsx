@@ -6,8 +6,8 @@ import MapaRota from './MapaRota'
 import NovoPedido from './NovoPedido'
 import { usePedidos } from '../../hooks/usePedidos'
 import { buscarRotaPedido } from '../../services/api'
-import { calcularRota, distancia, DOCA } from '../../utils/rota'
 import { formatarHora } from '../../utils/formatar'
+import { posicoesDaApi, rotaDaApi } from '../../utils/rotaApi'
 import './Pedidos.css'
 
 const filtros = [
@@ -23,16 +23,6 @@ const filtros = [
 const ordemStatus = { in_progress: 0, pending: 1, completed: 2, cancelled: 3 }
 
 const PARADAS_VISIVEIS = 6
-
-// "A" + prateleira "1" + posição "3" vira "A-1-3"
-function codigoPosicao(location) {
-  if (!location) return '—'
-  return [location.aisle?.code, location.shelf, location.position].filter(Boolean).join('-')
-}
-
-function pontoDaPosicao(location) {
-  return { x: Number(location?.coord_x ?? 0), y: Number(location?.coord_y ?? 0) }
-}
 
 // Números puros ganham "#" na frente (#4822); códigos como ORD-AB12CD ficam como estão.
 function numeroPedido(pedido) {
@@ -75,84 +65,11 @@ function passaNoFiltro(pedido, filtro) {
   }
 }
 
-// Monta as paradas do pedido e calcula a rota pelo vizinho mais próximo.
-function montarRota(pedido) {
-  const paradas = pedido.items.map((item) => ({
-    id: item.id,
-    codigo: codigoPosicao(item.location),
-    produto: item.product?.name ?? 'Produto sem nome',
-    quantidade: item.quantity,
-    coletada: item.is_picked,
-    coletadaEm: item.picked_at,
-    ponto: pontoDaPosicao(item.location),
-  }))
-
-  const rota = calcularRota(paradas)
-  const feitas = rota.paradas.filter((p) => p.coletada).length
-
-  // metros que ainda faltam: da última parada feita até o fim, voltando para a doca
-  let metrosFaltando = 0
-  let anterior = feitas ? rota.paradas[feitas - 1].ponto : DOCA
-  for (const parada of rota.paradas.slice(feitas)) {
-    metrosFaltando += distancia(anterior, parada.ponto)
-    anterior = parada.ponto
-  }
-  metrosFaltando += distancia(anterior, DOCA)
-
-  const itensFaltando = rota.paradas.slice(feitas).reduce((soma, p) => soma + p.quantidade, 0)
-
-  return { ...rota, feitas, minutosFaltando: estimarMinutos(metrosFaltando, itensFaltando), doca: DOCA }
-}
-
-// estimativa simples: 1 m/s andando + 20 s por item para pegar e bipar
-function estimarMinutos(metros, itens) {
-  return Math.max(1, Math.round((metros + itens * 20) / 60))
-}
-
-// Converte uma rota da API (a pé ou de empilhadeira) para o formato que o painel e o mapa usam.
-// Cada parada é uma posição; itens do pedido na mesma posição aparecem juntos.
-function paradasDaApi(rota) {
-  return rota.stops.map((stop) => ({
-    id: stop.location_id,
-    codigo: stop.code,
-    produto: stop.items.map((item) => item.name ?? 'Produto sem nome').join(', '),
-    quantidade: stop.items.reduce((soma, item) => soma + item.quantity, 0),
-    coletada: stop.picked,
-    coletadaEm: stop.picked_at,
-    ponto: { x: Number(stop.point.x), y: Number(stop.point.y) },
-  }))
-}
-
-// Converte a resposta de GET /orders/{id}/route. Os campos de topo são a rota a pé;
-// `forklift_route` é a rota própria dos itens grandes (RN04), ou null se não houver.
-function rotaDaApi(resposta) {
-  const paradas = paradasDaApi(resposta)
-  const itensFaltando = paradas.filter((p) => !p.coletada).reduce((soma, p) => soma + p.quantidade, 0)
-
-  let empilhadeira = null
-  if (resposta.forklift_route) {
-    empilhadeira = {
-      paradas: paradasDaApi(resposta.forklift_route),
-      feitas: resposta.forklift_route.picked_stops,
-      metros: Math.round(resposta.forklift_route.total_distance_m),
-    }
-  }
-
-  return {
-    paradas,
-    feitas: resposta.picked_stops,
-    metros: Math.round(resposta.total_distance_m),
-    minutosFaltando: estimarMinutos(resposta.remaining_distance_m, itensFaltando),
-    doca: { x: Number(resposta.dock.x), y: Number(resposta.dock.y) },
-    empilhadeira,
-  }
-}
-
 // Rota do pedido selecionado, calculada no backend (RF04) e buscada de novo quando o pedido
-// muda (a lista atualiza a cada 30 s). Enquanto a resposta não chega, ou se a API falhar,
-// usa o cálculo local de utils/rota.js para o mapa não ficar vazio.
+// muda (a lista atualiza a cada 30 s). Devolve { rota, erro }; rota fica null até a resposta chegar.
 function useRotaPedido(pedido) {
   const [resposta, setResposta] = useState(null)
+  const [erro, setErro] = useState('')
 
   useEffect(() => {
     if (!pedido) return undefined
@@ -160,10 +77,12 @@ function useRotaPedido(pedido) {
 
     buscarRotaPedido(pedido.id)
       .then((dados) => {
-        if (ativo) setResposta(dados)
+        if (!ativo) return
+        setResposta(dados)
+        setErro('')
       })
-      .catch(() => {
-        if (ativo) setResposta(null)
+      .catch((e) => {
+        if (ativo) setErro(e.message)
       })
 
     // troca de pedido antes da resposta chegar: ignora a resposta antiga
@@ -172,11 +91,12 @@ function useRotaPedido(pedido) {
     }
   }, [pedido])
 
-  return useMemo(() => {
-    if (!pedido) return null
-    if (resposta && resposta.order_id === pedido.id) return rotaDaApi(resposta)
-    return montarRota(pedido)
+  const rota = useMemo(() => {
+    if (!pedido || !resposta || resposta.order_id !== pedido.id) return null
+    return rotaDaApi(resposta)
   }, [pedido, resposta])
+
+  return { rota, erro: rota ? '' : erro }
 }
 
 function Pedidos({ usuario, onNavegar, onSair }) {
@@ -193,16 +113,7 @@ function Pedidos({ usuario, onNavegar, onSair }) {
     [recebidos],
   )
 
-  const posicoes = useMemo(
-    () =>
-      posicoesApi.map((location) => ({
-        id: location.id,
-        codigo: codigoPosicao(location),
-        corredor: location.aisle?.code ?? '',
-        ponto: pontoDaPosicao(location),
-      })),
-    [posicoesApi],
-  )
+  const posicoes = useMemo(() => posicoesDaApi(posicoesApi), [posicoesApi])
 
   const contagem = useMemo(() => {
     const resultado = {}
@@ -222,7 +133,7 @@ function Pedidos({ usuario, onNavegar, onSair }) {
   // Mostra o pedido escolhido se ele estiver na lista filtrada; se não, o primeiro da lista
   // (que é um em andamento, se houver).
   const selecionado = visiveis.find((p) => p.id === selecionadoId) ?? visiveis[0] ?? null
-  const rota = useRotaPedido(selecionado)
+  const { rota, erro: erroRota } = useRotaPedido(selecionado)
   const abertos = pedidos.filter((p) => p.status === 'pending' || p.status === 'in_progress').length
   const emAndamento = pedidos.filter((p) => p.status === 'in_progress').length
 
@@ -375,7 +286,11 @@ function Pedidos({ usuario, onNavegar, onSair }) {
               ) : (
                 <section className="dash-card ped-painel ped-painel-vazio">
                   <Icone nome="rotas" tamanho={28} />
-                  <p>Selecione um pedido na lista para ver a rota.</p>
+                  <p>
+                    {!selecionado && 'Selecione um pedido na lista para ver a rota.'}
+                    {selecionado && erroRota && `Não foi possível calcular a rota: ${erroRota}`}
+                    {selecionado && !erroRota && 'Calculando a rota...'}
+                  </p>
                 </section>
               )}
             </div>

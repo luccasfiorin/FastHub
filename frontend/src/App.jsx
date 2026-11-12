@@ -61,7 +61,7 @@ function App() {
     return <Configuracoes usuario={usuario} onNavegar={setPagina} onSair={sairDoSistema} />
   }
 
-  return <Dashboard onNavegar={setPagina} onSair={sairDoSistema} />
+  return <Dashboard usuario={usuario} onNavegar={setPagina} onSair={sairDoSistema} />
 }
 
 export default App

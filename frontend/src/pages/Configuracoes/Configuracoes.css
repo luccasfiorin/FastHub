@@ -149,6 +149,11 @@
   box-shadow: 0 0 0 3px rgba(73, 80, 155, 0.12);
 }
 
+.cfg-entrada input[readonly] {
+  background: #f4f5f9;
+  color: #6b7080;
+}
+
 .cfg-campo.com-erro input {
   border-color: #e5484d;
 }
@@ -351,7 +356,7 @@
 
 .cfg-convite {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 200px auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr) 180px auto;
   gap: 12px;
   align-items: end;
   margin-top: 16px;

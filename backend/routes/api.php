@@ -11,6 +11,10 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\PickerOrderController;
 use App\Http\Controllers\Api\ScanEventController;
+use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\SettingController;
+use App\Http\Controllers\Api\UserController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -34,10 +38,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/complete', [OrderStatusController::class, 'complete']);
     Route::post('/orders/{order}/cancel', [OrderStatusController::class, 'cancel']);
 
+    // Configurações: todos leem (o mapa usa o nome do armazém e os níveis); só o gestor salva.
+    Route::get('/settings', [SettingController::class, 'show']);
+
     Route::middleware('role:manager')->group(function () {
-        Route::get('/manager/dashboard', function () {
-            return response()->json(['message' => 'Painel do Gestor autorizado com sucesso!']);
-        });
+        Route::get('/dashboard', DashboardController::class);
+        Route::get('/reports', ReportController::class);
+        Route::get('/scan-events', [ScanEventController::class, 'index']);
+        Route::put('/settings', [SettingController::class, 'update']);
+        Route::apiResource('users', UserController::class)->except(['show']);
 
         Route::apiResource('aisles', AisleController::class)->except(['index', 'show']);
         Route::apiResource('locations', LocationController::class)->except(['index', 'show']);

@@ -1,4 +1,4 @@
-// Barras lado a lado: distância média por pedido com lista de papel x com a rota otimizada.
+// Barras lado a lado: distância média por pedido seguindo a ordem da lista x com a rota otimizada.
 
 const LARGURA = 340
 const ALTURA = 230
@@ -17,7 +17,7 @@ function GraficoDistancia({ grupos }) {
       className="rel-grafico-barras"
       role="img"
       aria-label={grupos
-        .map((g) => `${g.rotulo}: lista de papel ${g.papel} m, rota otimizada ${g.otimizada} m`)
+        .map((g) => `${g.rotulo}: ordem da lista ${g.papel} m, rota otimizada ${g.otimizada} m`)
         .join('; ')}
     >
       <line x1={10} x2={LARGURA - 10} y1={BASE} y2={BASE} className="rel-grade" />
@@ -30,7 +30,7 @@ function GraficoDistancia({ grupos }) {
         return (
           <g key={g.rotulo}>
             <title>
-              {g.titulo}: lista de papel {g.papel} m · rota otimizada {g.otimizada} m
+              {g.titulo}: ordem da lista {g.papel} m · rota otimizada {g.otimizada} m
             </title>
             <rect
               x={centro - LARGURA_BARRA - 2}

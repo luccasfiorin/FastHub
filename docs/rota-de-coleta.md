@@ -18,7 +18,7 @@ Premissas usadas no cálculo:
 
 - Cada posição tem `coord_x` e `coord_y` em metros (tabela `locations`).
 - A distância entre dois pontos é `|dx| + |dy|` (distância de Manhattan), porque o coletor anda pelos
-  corredores e não em linha reta. É a mesma regra do `frontend/src/utils/rota.js`.
+  corredores e não em linha reta. O frontend não recalcula: usa a rota que vem da API.
 - A expedição ainda não existe no banco: fica em `config('fasthub.dock')`, com padrão (0, 0).
 - Itens do mesmo pedido na mesma posição viram uma parada só.
 - Se o pedido já começou, as paradas coletadas ficam fixas no início, e só o que falta é reordenado.

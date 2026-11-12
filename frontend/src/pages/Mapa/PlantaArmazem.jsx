@@ -1,7 +1,6 @@
-import { DOCA_NA_PLANTA, PLANTA } from './dadosMapa'
 import { iniciais } from '../../utils/formatar'
 
-// Planta vista de cima: 1 estante por corredor, bloco de cima (posições 1–10) e de baixo (11–19).
+// Planta vista de cima: 1 estante por corredor, bloco de cima (prateleira 1) e de baixo (prateleira 2).
 // O coletor anda pelo vão à direita de cada estante e troca de corredor pelo corredor
 // transversal, que fica entre os dois blocos.
 
@@ -16,14 +15,19 @@ const TOPO_BLOCO_1 = 30
 const TOPO_BLOCO_2 = 367
 const Y_TRANSVERSAL = 343
 const Y_DOCA = 650
+// fim do texto "Doca de expedição": marcadores na doca ficam à direita disso
+const LIMITE_DOCA = 200
+
+// A doca fica à esquerda do primeiro corredor, embaixo.
+const DOCA_NA_PLANTA = { corredor: -1, doca: true }
 
 function xDaEstante(corredor) {
   return CENTRO_PRIMEIRO + corredor * ESPACO_CORREDOR - LARGURA_ESTANTE / 2
 }
 
-function yDaCelula(posicao) {
-  if (posicao <= 10) return TOPO_BLOCO_1 + (posicao - 1) * PASSO_POSICAO
-  return TOPO_BLOCO_2 + (posicao - 11) * PASSO_POSICAO
+function yDaCelula(posicao, limiteBloco) {
+  if (posicao <= limiteBloco) return TOPO_BLOCO_1 + (posicao - 1) * PASSO_POSICAO
+  return TOPO_BLOCO_2 + (posicao - limiteBloco - 1) * PASSO_POSICAO
 }
 
 // vão à direita da estante; a doca usa o corredor -1 (à esquerda do A)
@@ -31,21 +35,21 @@ function xDoVao(corredor) {
   return CENTRO_PRIMEIRO + corredor * ESPACO_CORREDOR + ESPACO_CORREDOR / 2
 }
 
-function coordenada(ponto, desvio = 0) {
-  const y = ponto === DOCA_NA_PLANTA ? Y_DOCA : yDaCelula(ponto.posicao) + ALTURA_POSICAO / 2
+function coordenada(ponto, limiteBloco, desvio = 0) {
+  const y = ponto.doca ? Y_DOCA : yDaCelula(ponto.posicao, limiteBloco) + ALTURA_POSICAO / 2
   return [xDoVao(ponto.corredor) + desvio, y]
 }
 
 // Linha andando só pelos corredores. O desvio separa as linhas de coletores diferentes
 // quando passam pelo mesmo vão.
-function caminho(pontos, desvio) {
+function caminho(pontos, limiteBloco, desvio) {
   if (pontos.length < 2) return ''
-  const linha = [coordenada(pontos[0], desvio)]
+  const linha = [coordenada(pontos[0], limiteBloco, desvio)]
   for (let i = 1; i < pontos.length; i++) {
     const a = pontos[i - 1]
     const b = pontos[i]
-    const [ax] = coordenada(a, desvio)
-    const [bx, by] = coordenada(b, desvio)
+    const [ax] = coordenada(a, limiteBloco, desvio)
+    const [bx, by] = coordenada(b, limiteBloco, desvio)
     if (a.corredor !== b.corredor) {
       linha.push([ax, Y_TRANSVERSAL + desvio], [bx, Y_TRANSVERSAL + desvio])
     }
@@ -80,6 +84,7 @@ function Etiqueta({ x, y, texto, esquerda = false }) {
 }
 
 function PlantaArmazem({
+  planta,
   posicoes,
   selecionada,
   onSelecionar,
@@ -99,26 +104,33 @@ function PlantaArmazem({
 
   // Onde fica cada marcador: na última parada coletada ou, para quem ainda não saiu,
   // esperando dentro da doca, um ao lado do outro a partir da direita.
+  // Quem não cabe na faixa da doca entra só na contagem "+N aguardando".
   let vagaNaDoca = LARGURA - 44
+  let foraDaDoca = 0
   const marcadores = coletoresVisiveis.map((c) => {
     if (c.aguardando) {
       const x = vagaNaDoca
-      vagaNaDoca -= larguraDaEtiqueta(`${c.nome} · #${c.pedido}`) + 58
+      const largura = larguraDaEtiqueta(`${c.nome} · #${c.pedido}`) + 58
+      if (x - largura + 40 < LIMITE_DOCA) {
+        foraDaDoca += 1
+        return null
+      }
+      vagaNaDoca -= largura
       return { coletor: c, x, y: Y_DOCA + 27, naDoca: true }
     }
     const atual = c.feitas > 0 ? c.paradas[c.feitas - 1].local : DOCA_NA_PLANTA
-    const [x, y] = coordenada(atual, c.desvio)
+    const [x, y] = coordenada(atual, planta.limiteBloco, c.desvio)
     return { coletor: c, x, y, naDoca: false }
-  })
+  }).filter(Boolean)
 
   return (
     <svg
       viewBox={`0 0 ${LARGURA} ${ALTURA}`}
       className="arm-planta"
       role="group"
-      aria-label="Planta do armazém com a ocupação das posições e as rotas dos coletores"
+      aria-label="Planta do armazém com as posições, os produtos e as rotas dos coletores"
     >
-      {PLANTA.corredores.map((letra, i) => (
+      {planta.corredores.map((letra, i) => (
         <text key={letra} x={xDaEstante(i) + LARGURA_ESTANTE / 2} y={16} className="arm-corredor">
           Corredor {letra}
         </text>
@@ -126,30 +138,30 @@ function PlantaArmazem({
 
       {posicoes.map((p) => {
         const x = xDaEstante(p.corredor)
-        const y = yDaCelula(p.posicao)
-        const ativa = p.codigo === selecionada
+        const y = yDaCelula(p.posicao, planta.limiteBloco)
+        const ativa = p.id === selecionada
         const apagada =
           (camadas.alertas && !p.divergencia) || (buscaEmPosicoes && !combinaPosicao(p))
         const faixa = camadas.ocupacao || p.divergencia ? p.faixa : 'neutra'
 
         return (
           <g
-            key={p.codigo}
+            key={p.id}
             className={`arm-celula ${faixa} ${ativa ? 'ativa' : ''} ${apagada ? 'apagada' : ''}`}
             role="button"
             tabIndex={0}
             aria-pressed={ativa}
-            aria-label={`Posição ${p.codigo}, ${p.ocupacao}% ocupada${p.divergencia ? ', com divergência' : ''}`}
-            onClick={() => onSelecionar(p.codigo)}
+            aria-label={`Posição ${p.codigo}, ${p.ocupada ? 'com produto' : 'sem produto'}${p.divergencia ? ', com divergência' : ''}`}
+            onClick={() => onSelecionar(p.id)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
-                onSelecionar(p.codigo)
+                onSelecionar(p.id)
               }
             }}
           >
             <title>
-              {p.codigo} · {p.ocupacao}% ocupada
+              {p.codigo} · {p.produtos.length ? p.produtos.map((prod) => prod.nome).join(', ') : 'sem produto'}
             </title>
             {p.divergencia && camadas.alertas && (
               <rect
@@ -180,6 +192,11 @@ function PlantaArmazem({
         <text x={62} y={Y_DOCA + 32}>
           Doca de expedição
         </text>
+        {camadas.coletores && foraDaDoca > 0 && (
+          <text x={62} y={Y_DOCA + 47} className="arm-doca-extra">
+            +{foraDaDoca} {foraDaDoca === 1 ? 'pedido aguardando' : 'pedidos aguardando'}
+          </text>
+        )}
       </g>
 
       {camadas.rotas &&
@@ -187,8 +204,8 @@ function PlantaArmazem({
           if (c.aguardando) return null
           const pontos = c.paradas.map((p) => p.local)
           const atual = c.feitas > 0 ? pontos[c.feitas - 1] : DOCA_NA_PLANTA
-          const feito = caminho([DOCA_NA_PLANTA, ...pontos.slice(0, c.feitas)], c.desvio)
-          const falta = caminho([atual, ...pontos.slice(c.feitas), DOCA_NA_PLANTA], c.desvio)
+          const feito = caminho([DOCA_NA_PLANTA, ...pontos.slice(0, c.feitas)], planta.limiteBloco, c.desvio)
+          const falta = caminho([atual, ...pontos.slice(c.feitas), DOCA_NA_PLANTA], planta.limiteBloco, c.desvio)
           const mostrarFalta = c.pedido === rotaSelecionada
 
           return (
