@@ -390,6 +390,7 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
             feitas={rota.feitas}
             concluido={concluido}
             doca={rota.doca}
+            retorno={rota.retorno}
             empilhadeira={empilhadeira}
           />
         ) : (

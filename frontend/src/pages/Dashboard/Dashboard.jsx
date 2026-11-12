@@ -186,12 +186,11 @@ function Dashboard({ usuario, onNavegar, onSair }) {
   })
   // em "Todos" sem busca, mostra os abertos e só os últimos concluídos; a lista completa fica no filtro próprio
   const concluidosVisiveis = 5
-  let concluidosMostrados = 0
-  const filtradas = candidatas.filter((linha) => {
-    if (filtro !== 'todos' || termo || linha.status !== 'concluido') return true
-    concluidosMostrados += 1
-    return concluidosMostrados <= concluidosVisiveis
-  })
+  const limitar = filtro === 'todos' && !termo
+  const idsConcluidos = new Set(
+    candidatas.filter((l) => l.status === 'concluido').slice(0, concluidosVisiveis).map((l) => l.id),
+  )
+  const filtradas = candidatas.filter((linha) => !limitar || linha.status !== 'concluido' || idsConcluidos.has(linha.id))
 
   const selecionada = linhas.find((l) => l.id === selecionadoId) ?? filtradas[0] ?? linhas[0] ?? null
   const rota = useRota(selecionada?.id ?? null, dados)
@@ -435,6 +434,7 @@ function Dashboard({ usuario, onNavegar, onSair }) {
                   feitas={rota.feitas}
                   concluido={selecionada.pedido.status === 'completed'}
                   doca={rota.doca}
+                  retorno={rota.retorno}
                   empilhadeira={rota.empilhadeira}
                 />
               ) : (

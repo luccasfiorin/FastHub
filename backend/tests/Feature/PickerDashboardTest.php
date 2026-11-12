@@ -148,7 +148,8 @@ class PickerDashboardTest extends TestCase
             ->assertJsonPath('pickers.0.current_order.progress', 50)
             ->assertJsonPath('pickers.0.current_order.has_mismatch', true)
             ->assertJsonPath('open_orders', 1)
-            ->assertJsonPath('summary.distance_km', 0.05)
+            // (0,0) até (30,40) pelos corredores: 30 m atravessando na frente + 40 m subindo = 70 m.
+            ->assertJsonPath('summary.distance_km', 0.07)
             ->assertJsonPath('summary.mismatches', 1)
             ->assertJsonCount(1, 'alerts');
 

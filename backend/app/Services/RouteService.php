@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Illuminate\Support\Collection;
@@ -15,8 +16,12 @@ use Illuminate\Support\Collection;
  * Regras:
  * - Cada parada é uma posição (locations) com coord_x e coord_y em metros.
  *   Itens do mesmo pedido na mesma posição viram uma parada só.
- * - O coletor anda pelos corredores, então a distância entre dois pontos é
- *   |dx| + |dy| (distância de Manhattan), não a linha reta.
+ * - O coletor anda pelos corredores: dentro do mesmo corredor, a distância é o
+ *   deslocamento ao longo dele; para trocar de corredor, ele vai até uma travessa
+ *   (a frente do armazém, na altura da expedição, ou o vão entre duas prateleiras),
+ *   atravessa e entra no outro. Ver distancia() e travessas().
+ * - O caminho desenhado nos mapas é o mesmo que foi medido: cada parada traz
+ *   path_from_previous e a rota traz return_path e path (inteiro). O frontend só desenha.
  * - As paradas já coletadas ficam primeiro, na ordem em que foram coletadas (picked_at).
  * - As que faltam são ordenadas pelo vizinho mais próximo, a partir da última
  *   coletada (ou da expedição, se o pedido ainda não começou), e depois melhoradas
@@ -26,14 +31,13 @@ use Illuminate\Support\Collection;
  *   formam uma rota própria, calculada com as mesmas regras, em forklift_route.
  *   Os campos de topo da resposta continuam sendo a rota a pé.
  *
- * Desempenho (RNF04): 5 consultas fixas ao banco (pedido, itens, produtos, posições e
- * corredores, com eager loading), qualquer que seja o tamanho do pedido, e o
+ * Desempenho (RNF04): 6 consultas fixas ao banco (pedido, itens, produtos, posições,
+ * corredores e a altura das travessas, com eager loading), qualquer que seja o tamanho do pedido, e o
  * cálculo é O(n²) no vizinho mais próximo, com 2-opt limitado a MAX_2OPT_PASSES
  * passadas. Pedidos de dezenas de paradas ficam bem abaixo de 1 ms de CPU.
  *
  * Expedição: ainda não existe no banco. O ponto vem de config('fasthub.dock')
- * (FASTHUB_DOCK_X / FASTHUB_DOCK_Y no .env); o padrão é a origem (0, 0) da planta,
- * igual ao frontend.
+ * (FASTHUB_DOCK_X / FASTHUB_DOCK_Y no .env); o padrão é a origem (0, 0) da planta.
  *
  * Exposto em GET /api/orders/{order}/route (OrderController@route).
  */
@@ -41,6 +45,9 @@ class RouteService
 {
     /** Limite de passadas do 2-opt, para o tempo de resposta ficar previsível. */
     private const MAX_2OPT_PASSES = 50;
+
+    /** Altura das travessas, calculada uma vez por requisição. */
+    private ?array $travessas = null;
 
     /**
      * Calcula a rota do pedido.
@@ -91,6 +98,7 @@ class RouteService
             'order_number' => $order->order_number,
             'status' => $order->status,
             'dock' => $dock,
+            'cross_aisles_y' => $this->travessas(),
             // Os campos de topo continuam sendo a rota a pé (mesmo formato de antes).
             'type' => 'foot',
             ...$this->calcularRota($aPe, $dock, $concluido),
@@ -180,6 +188,8 @@ class RouteService
             unset($parada['picked_at_ts']);
             $parada['sequence'] = $i + 1;
             $parada['distance_from_previous_m'] = round($trecho, 2);
+            // caminho desde a parada anterior (ou da expedição), já com o ponto de partida
+            $parada['path_from_previous'] = [$this->ponto($anterior['x'], $anterior['y']), ...$this->trecho($anterior, $parada['point'])];
             $stops[] = $parada;
 
             $anterior = $parada['point'];
@@ -208,6 +218,7 @@ class RouteService
             'total_distance_m' => round($total, 2),
             'remaining_distance_m' => round($restante, 2),
             'return_to_dock_m' => round($volta, 2),
+            'return_path' => $stops === [] ? [] : [$this->ponto($anterior['x'], $anterior['y']), ...$this->trecho($anterior, $dock)],
             'path' => $stops === [] ? [] : $this->caminho($dock, array_column($stops, 'point')),
         ];
     }
@@ -218,10 +229,108 @@ class RouteService
         return (bool) $item->product?->requires_forklift;
     }
 
-    /** Distância pelos corredores (Manhattan), em metros. */
+    /**
+     * Distância andando pelos corredores, em metros.
+     * No mesmo corredor (mesmo x), é só o deslocamento ao longo dele. Para trocar de corredor,
+     * o coletor desce ou sobe até um corredor de passagem (travessa), atravessa e entra no outro;
+     * vale a travessa que der o menor percurso.
+     */
     public function distancia(array $a, array $b): float
     {
-        return abs($a['x'] - $b['x']) + abs($a['y'] - $b['y']);
+        if ($this->mesmoX($a, $b)) {
+            return abs($a['y'] - $b['y']);
+        }
+
+        return abs($a['x'] - $b['x']) + $this->desvioAteTravessa($a, $b)[1];
+    }
+
+    /**
+     * Pontos que o coletor percorre de $a até $b (sem incluir $a), passando pela travessa
+     * quando troca de corredor. É o mesmo percurso medido em distancia().
+     *
+     * @return list<array{x: float, y: float}>
+     */
+    public function trecho(array $a, array $b): array
+    {
+        if ($this->mesmoX($a, $b)) {
+            return $this->mesmoPonto($a, $b) ? [] : [$this->ponto($b['x'], $b['y'])];
+        }
+
+        $y = $this->desvioAteTravessa($a, $b)[0];
+        $pontos = [];
+        if (abs($a['y'] - $y) > 0.001) {
+            $pontos[] = $this->ponto($a['x'], $y);
+        }
+        $pontos[] = $this->ponto($b['x'], $y);
+        if (abs($b['y'] - $y) > 0.001) {
+            $pontos[] = $this->ponto($b['x'], $b['y']);
+        }
+
+        return $pontos;
+    }
+
+    /**
+     * Altura (y, em metros) dos corredores de passagem, de baixo para cima:
+     * - a frente do armazém, na altura da expedição;
+     * - um vão entre cada prateleira e a seguinte (ex.: entre a prateleira 1 e a 2),
+     *   no meio do espaço entre a última posição de uma e a primeira da outra.
+     *
+     * @return list<float>
+     */
+    public function travessas(): array
+    {
+        if ($this->travessas !== null) {
+            return $this->travessas;
+        }
+
+        $faixas = Location::query()
+            ->selectRaw('shelf, min(coord_y) as menor, max(coord_y) as maior')
+            ->groupBy('shelf')
+            ->get()
+            ->sortByDesc('maior')
+            ->values();
+
+        $ys = [$this->dock()['y']];
+        for ($i = 1; $i < $faixas->count(); $i++) {
+            $cima = $faixas[$i - 1];
+            $baixo = $faixas[$i];
+            if ((float) $cima->menor > (float) $baixo->maior) {
+                $ys[] = round(((float) $cima->menor + (float) $baixo->maior) / 2, 2);
+            }
+        }
+
+        sort($ys);
+
+        return $this->travessas = array_values(array_unique($ys, SORT_REGULAR));
+    }
+
+    /** [y da melhor travessa, metros subindo/descendo até ela e dela até o destino]. */
+    private function desvioAteTravessa(array $a, array $b): array
+    {
+        $melhor = null;
+        foreach ($this->travessas() as $y) {
+            $custo = abs($a['y'] - $y) + abs($b['y'] - $y);
+            if ($melhor === null || $custo < $melhor[1]) {
+                $melhor = [$y, $custo];
+            }
+        }
+
+        return $melhor;
+    }
+
+    private function mesmoX(array $a, array $b): bool
+    {
+        return abs($a['x'] - $b['x']) < 0.001;
+    }
+
+    private function mesmoPonto(array $a, array $b): bool
+    {
+        return $this->mesmoX($a, $b) && abs($a['y'] - $b['y']) < 0.001;
+    }
+
+    private function ponto(float $x, float $y): array
+    {
+        return ['x' => round($x, 2), 'y' => round($y, 2)];
     }
 
     /** Ponto da expedição. Sem configuração, fica na origem da planta. */
@@ -346,19 +455,11 @@ class RouteService
      */
     private function caminho(array $dock, array $pontos): array
     {
-        $sequencia = array_merge([$dock], $pontos, [$dock]);
-        $linha = [$dock];
-
-        for ($i = 1, $n = count($sequencia); $i < $n; $i++) {
-            $a = $sequencia[$i - 1];
-            $b = $sequencia[$i];
-
-            if ($a['x'] !== $b['x'] && $a['y'] !== $b['y']) {
-                $linha[] = ['x' => $b['x'], 'y' => $a['y']];
-            }
-            if ($b !== end($linha)) {
-                $linha[] = $b;
-            }
+        $linha = [$this->ponto($dock['x'], $dock['y'])];
+        $anterior = $dock;
+        foreach ([...$pontos, $dock] as $ponto) {
+            array_push($linha, ...$this->trecho($anterior, $ponto));
+            $anterior = $ponto;
         }
 
         return $linha;

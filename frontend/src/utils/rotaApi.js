@@ -26,8 +26,25 @@ export function estimarMinutos(metros, itens) {
   return Math.max(1, Math.round((metros + itens * 20) / 60))
 }
 
+function pontosDaApi(lista) {
+  return (lista ?? []).map((p) => ({ x: Number(p.x), y: Number(p.y) }))
+}
+
+// Junta os trechos num caminho só, sem repetir o ponto onde um trecho termina e o outro começa.
+export function juntarTrechos(trechos) {
+  const linha = []
+  for (const trecho of trechos) {
+    for (const ponto of trecho) {
+      const ultimo = linha[linha.length - 1]
+      if (!ultimo || ultimo.x !== ponto.x || ultimo.y !== ponto.y) linha.push(ponto)
+    }
+  }
+  return linha
+}
+
 // Converte uma rota da API (a pé ou de empilhadeira) para o formato que o painel e o mapa usam.
 // Cada parada é uma posição; itens do pedido na mesma posição aparecem juntos.
+// `trecho` é o caminho desde a parada anterior, calculado no backend (o mesmo usado na distância).
 function paradasDaApi(rota) {
   return rota.stops.map((stop) => ({
     id: stop.location_id,
@@ -37,6 +54,7 @@ function paradasDaApi(rota) {
     coletada: stop.picked,
     coletadaEm: stop.picked_at,
     ponto: { x: Number(stop.point.x), y: Number(stop.point.y) },
+    trecho: pontosDaApi(stop.path_from_previous),
   }))
 }
 
@@ -52,6 +70,7 @@ export function rotaDaApi(resposta) {
       paradas: paradasDaApi(resposta.forklift_route),
       feitas: resposta.forklift_route.picked_stops,
       metros: Math.round(resposta.forklift_route.total_distance_m),
+      retorno: pontosDaApi(resposta.forklift_route.return_path),
     }
   }
 
@@ -61,6 +80,8 @@ export function rotaDaApi(resposta) {
     metros: Math.round(resposta.total_distance_m),
     minutosFaltando: estimarMinutos(resposta.remaining_distance_m, itensFaltando),
     doca: { x: Number(resposta.dock.x), y: Number(resposta.dock.y) },
+    travessas: (resposta.cross_aisles_y ?? []).map(Number),
+    retorno: pontosDaApi(resposta.return_path),
     empilhadeira,
   }
 }

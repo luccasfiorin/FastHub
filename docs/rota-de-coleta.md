@@ -17,8 +17,15 @@ cresce exponencialmente com o número de paradas. Por isso a escolha é entre **
 Premissas usadas no cálculo:
 
 - Cada posição tem `coord_x` e `coord_y` em metros (tabela `locations`).
-- A distância entre dois pontos é `|dx| + |dy|` (distância de Manhattan), porque o coletor anda pelos
-  corredores e não em linha reta. O frontend não recalcula: usa a rota que vem da API.
+- O coletor anda pelos corredores. No mesmo corredor, a distância é o deslocamento ao longo dele. Para
+  trocar de corredor, ele vai até uma travessa (a frente do armazém, na altura da expedição, ou o vão
+  entre duas prateleiras, calculado a partir das posições cadastradas), atravessa e entra no outro,
+  usando a travessa que der o menor percurso.
+- A API devolve o traçado de cada trecho (`path_from_previous` em cada parada e `return_path`), que é
+  exatamente o percurso medido. Os mapas do frontend só desenham esse traçado; nada é recalculado no
+  navegador.
+- As simulações abaixo foram feitas com a distância `|dx| + |dy|`, antes da regra das travessas. A
+  comparação entre os algoritmos continua valendo, mas os metros absolutos hoje saem maiores.
 - A expedição ainda não existe no banco: fica em `config('fasthub.dock')`, com padrão (0, 0).
 - Itens do mesmo pedido na mesma posição viram uma parada só.
 - Se o pedido já começou, as paradas coletadas ficam fixas no início, e só o que falta é reordenado.

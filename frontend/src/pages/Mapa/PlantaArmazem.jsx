@@ -1,8 +1,10 @@
 import { iniciais } from '../../utils/formatar'
+import { juntarTrechos } from '../../utils/rotaApi'
 
 // Planta vista de cima: 1 estante por corredor, bloco de cima (prateleira 1) e de baixo (prateleira 2).
 // O coletor anda pelo vão à direita de cada estante e troca de corredor pelo corredor
-// transversal, que fica entre os dois blocos.
+// transversal (entre os dois blocos) ou pela frente, junto à doca.
+// As rotas não são calculadas aqui: o traçado vem da API em metros e é só convertido para o desenho.
 
 const LARGURA = 752
 const ALTURA = 714
@@ -18,9 +20,6 @@ const Y_DOCA = 650
 // fim do texto "Doca de expedição": marcadores na doca ficam à direita disso
 const LIMITE_DOCA = 200
 
-// A doca fica à esquerda do primeiro corredor, embaixo.
-const DOCA_NA_PLANTA = { corredor: -1, doca: true }
-
 function xDaEstante(corredor) {
   return CENTRO_PRIMEIRO + corredor * ESPACO_CORREDOR - LARGURA_ESTANTE / 2
 }
@@ -35,27 +34,54 @@ function xDoVao(corredor) {
   return CENTRO_PRIMEIRO + corredor * ESPACO_CORREDOR + ESPACO_CORREDOR / 2
 }
 
-function coordenada(ponto, limiteBloco, desvio = 0) {
-  const y = ponto.doca ? Y_DOCA : yDaCelula(ponto.posicao, limiteBloco) + ALTURA_POSICAO / 2
-  return [xDoVao(ponto.corredor) + desvio, y]
+// Interpolação linear por partes entre pares [valor em metros, valor no desenho].
+// Fora da faixa conhecida, continua a reta das duas pontas.
+function interpolador(pares) {
+  const porValor = new Map()
+  for (const [metros, tela] of pares) {
+    const chave = Math.round(metros * 100) / 100
+    const lista = porValor.get(chave) ?? []
+    lista.push(tela)
+    porValor.set(chave, lista)
+  }
+  const pontos = [...porValor]
+    .map(([metros, lista]) => [metros, lista.reduce((s, v) => s + v, 0) / lista.length])
+    .sort((p, q) => p[0] - q[0])
+
+  return (valor) => {
+    if (pontos.length === 0) return 0
+    if (pontos.length === 1) return pontos[0][1]
+    let i = pontos.findIndex(([metros]) => metros >= valor)
+    if (i === -1) i = pontos.length - 1
+    if (i === 0) i = 1
+    const [m0, t0] = pontos[i - 1]
+    const [m1, t1] = pontos[i]
+    return t0 + ((valor - m0) / (m1 - m0)) * (t1 - t0)
+  }
 }
 
-// Linha andando só pelos corredores. O desvio separa as linhas de coletores diferentes
-// quando passam pelo mesmo vão.
-function caminho(pontos, limiteBloco, desvio) {
+// Converte um ponto em metros (coord_x, coord_y) para o desenho, usando as posições cadastradas
+// como referência: cada corredor vira o vão dele, cada altura vira a linha da posição,
+// a travessa do meio vira o corredor transversal e a frente (altura da doca) vira a doca.
+function criarConversor(posicoes, planta, geometria) {
+  const doca = geometria?.doca ?? { x: 0, y: 0 }
+  const travessas = geometria?.travessas ?? []
+
+  const xs = [[doca.x, xDoVao(-1)], ...posicoes.map((p) => [p.ponto.x, xDoVao(p.corredor)])]
+  const ys = [
+    [doca.y, Y_DOCA],
+    ...posicoes.map((p) => [p.ponto.y, yDaCelula(p.posicao, planta.limiteBloco) + ALTURA_POSICAO / 2]),
+    ...travessas.filter((t) => Math.abs(t - doca.y) > 0.01).map((t) => [t, Y_TRANSVERSAL]),
+  ]
+  const paraX = interpolador(xs)
+  const paraY = interpolador(ys)
+
+  return (ponto, desvio = 0) => [paraX(ponto.x) + desvio, paraY(ponto.y) + desvio]
+}
+
+function linha(pontos, converter, desvio) {
   if (pontos.length < 2) return ''
-  const linha = [coordenada(pontos[0], limiteBloco, desvio)]
-  for (let i = 1; i < pontos.length; i++) {
-    const a = pontos[i - 1]
-    const b = pontos[i]
-    const [ax] = coordenada(a, limiteBloco, desvio)
-    const [bx, by] = coordenada(b, limiteBloco, desvio)
-    if (a.corredor !== b.corredor) {
-      linha.push([ax, Y_TRANSVERSAL + desvio], [bx, Y_TRANSVERSAL + desvio])
-    }
-    linha.push([bx, by])
-  }
-  return linha.map(([x, y]) => `${x},${y}`).join(' ')
+  return pontos.map((p) => converter(p, desvio).join(',')).join(' ')
 }
 
 // letra escura em cima de cor clara (ex.: amarelo), branca em cima de cor escura
@@ -85,6 +111,7 @@ function Etiqueta({ x, y, texto, esquerda = false }) {
 
 function PlantaArmazem({
   planta,
+  geometria,
   posicoes,
   selecionada,
   onSelecionar,
@@ -101,6 +128,8 @@ function PlantaArmazem({
   const buscaEmPosicoes = termo && posicoes.some(combinaPosicao)
   const buscaEmColetores = termo && coletores.some(combinaColetor)
   const coletoresVisiveis = buscaEmColetores ? coletores.filter(combinaColetor) : coletores
+  const converter = criarConversor(posicoes, planta, geometria)
+  const doca = geometria?.doca ?? { x: 0, y: 0 }
 
   // Onde fica cada marcador: na última parada coletada ou, para quem ainda não saiu,
   // esperando dentro da doca, um ao lado do outro a partir da direita.
@@ -118,8 +147,8 @@ function PlantaArmazem({
       vagaNaDoca -= largura
       return { coletor: c, x, y: Y_DOCA + 27, naDoca: true }
     }
-    const atual = c.feitas > 0 ? c.paradas[c.feitas - 1].local : DOCA_NA_PLANTA
-    const [x, y] = coordenada(atual, planta.limiteBloco, c.desvio)
+    const atual = c.feitas > 0 ? c.paradas[c.feitas - 1].ponto : doca
+    const [x, y] = converter(atual, c.desvio)
     return { coletor: c, x, y, naDoca: false }
   }).filter(Boolean)
 
@@ -202,10 +231,13 @@ function PlantaArmazem({
       {camadas.rotas &&
         coletoresVisiveis.map((c) => {
           if (c.aguardando) return null
-          const pontos = c.paradas.map((p) => p.local)
-          const atual = c.feitas > 0 ? pontos[c.feitas - 1] : DOCA_NA_PLANTA
-          const feito = caminho([DOCA_NA_PLANTA, ...pontos.slice(0, c.feitas)], planta.limiteBloco, c.desvio)
-          const falta = caminho([atual, ...pontos.slice(c.feitas), DOCA_NA_PLANTA], planta.limiteBloco, c.desvio)
+          // mesmo traçado que o backend mediu: trechos até a última coletada e o que falta + volta
+          const feito = linha(juntarTrechos(c.paradas.slice(0, c.feitas).map((p) => p.trecho)), converter, c.desvio)
+          const falta = linha(
+            juntarTrechos([...c.paradas.slice(c.feitas).map((p) => p.trecho), c.retorno]),
+            converter,
+            c.desvio,
+          )
           const mostrarFalta = c.pedido === rotaSelecionada
 
           return (

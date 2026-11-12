@@ -31,35 +31,45 @@ const nomesFaixa = {
   cheia: 'Com produto',
 }
 
-// Parada da rota da API para o formato da planta ({ corredor, posicao }).
-function paradasDaRota(rota, corredores) {
+function pontos(lista) {
+  return (lista ?? []).map((p) => ({ x: Number(p.x), y: Number(p.y) }))
+}
+
+// Paradas da rota da API, com o trecho (em metros) que o backend calculou desde a parada anterior.
+function paradasDaRota(rota) {
   return rota.stops.map((stop) => ({
     codigo: stop.code,
     coletada: stop.picked,
-    local: { corredor: corredores.indexOf(stop.aisle), posicao: Number(stop.position) },
+    ponto: { x: Number(stop.point.x), y: Number(stop.point.y) },
+    trecho: pontos(stop.path_from_previous),
   }))
 }
 
 // Coletores com pedido aberto: quem já começou aparece na última posição coletada,
 // quem ainda não saiu (pedido atribuído e não iniciado) fica aguardando na doca.
-async function buscarColetoresNoMapa(corredores, tiposPorColetor) {
+async function buscarColetoresNoMapa(tiposPorColetor) {
   const [emAndamento, pendentes] = await Promise.all([
     listarPedidosPorStatus('in_progress'),
     listarPedidosPorStatus('pending'),
   ])
+
+  // doca e travessas vêm junto com a rota; sem pedido em andamento, ficam no padrão
+  let geometria = null
 
   const andando = await Promise.all(
     emAndamento
       .filter((p) => p.picker)
       .map(async (pedido) => {
         const rota = await buscarRotaPedido(pedido.id)
+        geometria ??= { doca: { x: Number(rota.dock.x), y: Number(rota.dock.y) }, travessas: (rota.cross_aisles_y ?? []).map(Number) }
         // operador de empilhadeira segue a rota dos itens grandes; os demais, a rota a pé
         const usaEmpilhadeira = tiposPorColetor.get(pedido.picker.id) === 'forklift' && rota.forklift_route
         const trecho = usaEmpilhadeira ? rota.forklift_route : rota
         return {
           pedido: pedido.order_number,
           nome: pedido.picker.name,
-          paradas: paradasDaRota(trecho, corredores),
+          paradas: paradasDaRota(trecho),
+          retorno: pontos(trecho.return_path),
           feitas: trecho.picked_stops,
           aguardando: false,
         }
@@ -68,16 +78,24 @@ async function buscarColetoresNoMapa(corredores, tiposPorColetor) {
 
   const naDoca = pendentes
     .filter((p) => p.picker)
-    .map((pedido) => ({ pedido: pedido.order_number, nome: pedido.picker.name, paradas: [], feitas: 0, aguardando: true }))
+    .map((pedido) => ({
+      pedido: pedido.order_number,
+      nome: pedido.picker.name,
+      paradas: [],
+      retorno: [],
+      feitas: 0,
+      aguardando: true,
+    }))
 
   const todos = [...andando, ...naDoca].map((c, i) => ({ ...c, cor: corDoColetor(i) }))
 
   // afasta um pouco as linhas de cada coletor para não ficarem uma em cima da outra
   const emRota = todos.filter((c) => !c.aguardando)
-  return todos.map((c) => {
+  const coletores = todos.map((c) => {
     const indice = emRota.indexOf(c)
     return { ...c, desvio: indice < 0 ? 0 : (indice - (emRota.length - 1) / 2) * 5 }
   })
+  return { coletores, geometria }
 }
 
 function useMapa() {
@@ -99,7 +117,7 @@ function useMapa() {
         ])
         const planta = montarPlanta(locations)
         const tipos = new Map(coletores.pickers.map((c) => [c.id, c.picker_type]))
-        const noMapa = await buscarColetoresNoMapa(planta.corredores, tipos)
+        const noMapa = await buscarColetoresNoMapa(tipos)
 
         if (!ativo) return
         setDados({
@@ -107,7 +125,8 @@ function useMapa() {
           posicoes: montarPosicoes(locations, produtos, divergencias, planta, configuracoes.settings),
           divergencias,
           config: configuracoes.settings,
-          coletores: noMapa,
+          coletores: noMapa.coletores,
+          geometria: noMapa.geometria,
         })
         setErro('')
       } catch (e) {
@@ -282,6 +301,7 @@ function Mapa({ usuario, onNavegar, onSair }) {
 
               <PlantaArmazem
                 planta={planta}
+                geometria={dados.geometria}
                 posicoes={posicoes}
                 selecionada={posicao.id}
                 onSelecionar={setSelecionadaId}

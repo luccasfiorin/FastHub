@@ -1,6 +1,9 @@
+import { juntarTrechos } from '../../utils/rotaApi'
+
 // Desenho da planta com a rota do pedido, a partir das coordenadas das posições cadastradas.
 // Todas as posições do armazém aparecem como pequenos quadrados; as do pedido viram paradas numeradas.
-// O caminho anda primeiro na horizontal e depois na vertical, como pelos corredores.
+// O caminho não é calculado aqui: é o traçado que veio da API (trecho de cada parada + volta à doca),
+// o mesmo que o backend usou para medir a distância. A doca fica embaixo, como no Mapa do armazém.
 
 const LARGURA = 600
 const ALTURA_MAXIMA = 420
@@ -14,8 +17,9 @@ function limites(pontos) {
 }
 
 // `doca` é o ponto da expedição, que vem da API (dock) junto com a rota.
-// `empilhadeira` ({ paradas, feitas }) é a rota própria dos itens grandes (RN04), desenhada em outra cor.
-function MapaRota({ posicoes, paradas, feitas, concluido, doca, empilhadeira = null }) {
+// `retorno` é o caminho da última parada de volta à doca.
+// `empilhadeira` ({ paradas, feitas, retorno }) é a rota própria dos itens grandes (RN04), desenhada em outra cor.
+function MapaRota({ posicoes, paradas, feitas, concluido, doca, retorno = [], empilhadeira = null }) {
   const paradasEmpilhadeira = empilhadeira?.paradas ?? []
   const pontosDaPlanta = [
     doca,
@@ -31,30 +35,24 @@ function MapaRota({ posicoes, paradas, feitas, concluido, doca, empilhadeira = n
   )
   const altura = Math.max(220, (maxY - minY) * escala + MARGEM * 2)
 
-  const tela = (ponto) => [MARGEM + (ponto.x - minX) * escala, MARGEM + (ponto.y - minY) * escala]
+  // y em metros cresce para cima (a doca fica em y baixo); na tela, y cresce para baixo
+  const tela = (ponto) => [MARGEM + (ponto.x - minX) * escala, MARGEM + (maxY - ponto.y) * escala]
 
-  function caminho(pontos) {
+  function linha(pontos) {
     if (pontos.length < 2) return ''
-    const linha = [tela(pontos[0])]
-    for (let i = 1; i < pontos.length; i++) {
-      const [ax, ay] = tela(pontos[i - 1])
-      const [bx, by] = tela(pontos[i])
-      if (ax !== bx && ay !== by) linha.push([bx, ay])
-      linha.push([bx, by])
-    }
-    return linha.map(([x, y]) => `${x},${y}`).join(' ')
+    return pontos.map((p) => tela(p).join(',')).join(' ')
   }
 
+  // feito: trechos até a última parada coletada; falta: o resto e a volta à doca
+  const caminhoFeito = linha(juntarTrechos(paradas.slice(0, feitas).map((p) => p.trecho)))
+  const caminhoFalta = linha(juntarTrechos([...paradas.slice(feitas).map((p) => p.trecho), retorno]))
   const pontos = paradas.map((p) => p.ponto)
-  const ultimoFeito = feitas > 0 ? pontos[feitas - 1] : doca
-  const caminhoFeito = caminho([doca, ...pontos.slice(0, feitas)])
-  const caminhoFalta = caminho([ultimoFeito, ...pontos.slice(feitas), doca])
 
   // nome do corredor escrito em cima da primeira posição dele
   const corredores = new Map()
   for (const posicao of posicoes) {
     const atual = corredores.get(posicao.corredor)
-    if (!atual || posicao.ponto.y < atual.y || (posicao.ponto.y === atual.y && posicao.ponto.x < atual.x)) {
+    if (!atual || posicao.ponto.y > atual.y || (posicao.ponto.y === atual.y && posicao.ponto.x < atual.x)) {
       corredores.set(posicao.corredor, posicao.ponto)
     }
   }
@@ -62,11 +60,11 @@ function MapaRota({ posicoes, paradas, feitas, concluido, doca, empilhadeira = n
   const [docaX, docaY] = tela(doca)
 
   // Rota da empilhadeira: mesmo desenho, com caminho e paradas próprios.
-  const pontosEmp = paradasEmpilhadeira.map((p) => p.ponto)
   const feitasEmp = empilhadeira?.feitas ?? 0
-  const ultimoFeitoEmp = feitasEmp > 0 ? pontosEmp[feitasEmp - 1] : doca
-  const caminhoEmpFeito = caminho([doca, ...pontosEmp.slice(0, feitasEmp)])
-  const caminhoEmpFalta = pontosEmp.length ? caminho([ultimoFeitoEmp, ...pontosEmp.slice(feitasEmp), doca]) : ''
+  const caminhoEmpFeito = linha(juntarTrechos(paradasEmpilhadeira.slice(0, feitasEmp).map((p) => p.trecho)))
+  const caminhoEmpFalta = paradasEmpilhadeira.length
+    ? linha(juntarTrechos([...paradasEmpilhadeira.slice(feitasEmp).map((p) => p.trecho), empilhadeira.retorno ?? []]))
+    : ''
 
   // Se a empilhadeira para na mesma posição que o coletor a pé, desloca o marcador para não sobrepor.
   const ocupados = new Set(pontos.map((p) => `${p.x},${p.y}`))

@@ -16,11 +16,13 @@ use App\Models\ScanEvent;
  * - itens/h: itens dividido pelo tempo ativo em horas (precisa de bipagens);
  * - acurácia: bipagens ok dividido pelo total de bipagens;
  * - tempo ocioso: tempo em pausa dividido pelo tempo entre a primeira e a última bipagem;
- * - distância: soma da distância em linha reta entre as posições coletadas em
- *   sequência no mesmo pedido (coord_x e coord_y em metros).
+ * - distância: soma da distância pelos corredores (a mesma do RouteService) entre as
+ *   posições coletadas em sequência no mesmo pedido.
  */
 class PickerMetrics
 {
+    public function __construct(private RouteService $routes) {}
+
     /** Devolve [início, fim] do período: today, week ou month. */
     public function window(string $period): array
     {
@@ -96,9 +98,10 @@ class PickerMetrics
 
             // Só soma a distância se o item anterior era do mesmo pedido.
             if ($anterior !== null && $anterior->order_id === $item->order_id) {
-                $dx = $item->location->coord_x - $anterior->location->coord_x;
-                $dy = $item->location->coord_y - $anterior->location->coord_y;
-                $dados[$id]['metros'] += sqrt($dx * $dx + $dy * $dy);
+                $dados[$id]['metros'] += $this->routes->distancia(
+                    ['x' => (float) $anterior->location->coord_x, 'y' => (float) $anterior->location->coord_y],
+                    ['x' => (float) $item->location->coord_x, 'y' => (float) $item->location->coord_y],
+                );
             }
             $anterior = $item;
         }

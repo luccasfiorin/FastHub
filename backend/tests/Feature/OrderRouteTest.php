@@ -197,6 +197,51 @@ class OrderRouteTest extends TestCase
             ->assertJsonPath('forklift_route.total_distance_m', 14);
     }
 
+    /**
+     * Planta com duas prateleiras e um vão entre elas (travessa em y = 10):
+     * prateleira 1 de y = 12 a 20 e prateleira 2 de y = 2 a 8.
+     * Para trocar de corredor lá em cima, o coletor usa o vão, não a frente do armazém.
+     */
+    public function test_route_crosses_aisles_through_the_gap_between_shelves(): void
+    {
+        $a = Aisle::create(['code' => 'A']);
+        $b = Aisle::create(['code' => 'B']);
+        Location::create(['aisle_id' => $a->id, 'shelf' => '2', 'position' => '11', 'coord_x' => 3, 'coord_y' => 2]);
+        Location::create(['aisle_id' => $a->id, 'shelf' => '2', 'position' => '15', 'coord_x' => 3, 'coord_y' => 8]);
+        $cimaA = Location::create(['aisle_id' => $a->id, 'shelf' => '1', 'position' => '05', 'coord_x' => 3, 'coord_y' => 12]);
+        Location::create(['aisle_id' => $a->id, 'shelf' => '1', 'position' => '01', 'coord_x' => 3, 'coord_y' => 20]);
+        $cimaB = Location::create(['aisle_id' => $b->id, 'shelf' => '1', 'position' => '05', 'coord_x' => 6, 'coord_y' => 12]);
+
+        $order = Order::create(['order_number' => 'ORD-VAO', 'status' => 'pending']);
+        foreach ([$cimaA, $cimaB] as $i => $location) {
+            $order->items()->create(['product_id' => $this->produto("V{$i}")->id, 'location_id' => $location->id, 'quantity' => 1, 'unit_price' => 0]);
+        }
+        Sanctum::actingAs($this->usuario('manager', 'gestor@fasthub.test'));
+
+        $res = $this->getJson("/api/orders/{$order->id}/route")->assertOk();
+
+        $res->assertJsonPath('cross_aisles_y', [0, 10]);
+        // expedição (0,0) → A-12: 3 + 12 = 15; A-12 → B-12 pelo vão: 2 + 3 + 2 = 7;
+        // B-12 → expedição pela frente: 12 + 6 = 18. Total 40 m.
+        $res->assertJsonPath('stops.1.distance_from_previous_m', 7)
+            ->assertJsonPath('total_distance_m', 40);
+
+        // o desenho é o mesmo percurso: desce até o vão (y=10), atravessa, sobe até a posição
+        $this->assertEquals(
+            [['x' => 3, 'y' => 12], ['x' => 3, 'y' => 10], ['x' => 6, 'y' => 10], ['x' => 6, 'y' => 12]],
+            $res->json('stops.1.path_from_previous'),
+        );
+        $this->assertEquals([['x' => 6, 'y' => 12], ['x' => 6, 'y' => 0], ['x' => 0, 'y' => 0]], $res->json('return_path'));
+
+        // o comprimento do caminho desenhado é a distância informada
+        $pontos = $res->json('path');
+        $comprimento = 0;
+        for ($i = 1; $i < count($pontos); $i++) {
+            $comprimento += abs($pontos[$i]['x'] - $pontos[$i - 1]['x']) + abs($pontos[$i]['y'] - $pontos[$i - 1]['y']);
+        }
+        $this->assertEqualsWithDelta(40, $comprimento, 0.01);
+    }
+
     public function test_picker_sees_only_own_order(): void
     {
         $dono = $this->usuario('picker', 'dono@fasthub.test');
