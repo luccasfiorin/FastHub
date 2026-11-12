@@ -157,6 +157,21 @@ const desenhos = {
       <path d="m13.5 6.5 4 4" />
     </>
   ),
+  pausa: (
+    <>
+      <path d="M9 5v14M15 5v14" />
+    </>
+  ),
+  play: (
+    <>
+      <path d="M7 4.5v15L19 12z" />
+    </>
+  ),
+  codigo: (
+    <>
+      <path d="M3 5v14M7 5v14M10 5v14M14 5v14M17 5v14M21 5v14" />
+    </>
+  ),
   empilhadeira: (
     <>
       <path d="M3 18V9h7l3 5v4" />
