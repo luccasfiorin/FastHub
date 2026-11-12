@@ -19,7 +19,9 @@ function limites(pontos) {
 // `doca` é o ponto da expedição, que vem da API (dock) junto com a rota.
 // `retorno` é o caminho da última parada de volta à doca.
 // `empilhadeira` ({ paradas, feitas, retorno }) é a rota própria dos itens grandes (RN04), desenhada em outra cor.
-function MapaRota({ posicoes, paradas, feitas, concluido, doca, retorno = [], empilhadeira = null }) {
+// `ajustarLargura` corta a sobra dos lados e deixa o desenho com a largura da planta
+// (usado na tela do coletor, para o mapa ficar legível no celular).
+function MapaRota({ posicoes, paradas, feitas, concluido, doca, retorno = [], empilhadeira = null, ajustarLargura = false }) {
   const paradasEmpilhadeira = empilhadeira?.paradas ?? []
   const pontosDaPlanta = [
     doca,
@@ -34,6 +36,7 @@ function MapaRota({ posicoes, paradas, feitas, concluido, doca, retorno = [], em
     (ALTURA_MAXIMA - MARGEM * 2) / Math.max(maxY - minY, 1),
   )
   const altura = Math.max(220, (maxY - minY) * escala + MARGEM * 2)
+  const largura = ajustarLargura ? Math.min(LARGURA, (maxX - minX) * escala + MARGEM * 2) : LARGURA
 
   // y em metros cresce para cima (a doca fica em y baixo); na tela, y cresce para baixo
   const tela = (ponto) => [MARGEM + (ponto.x - minX) * escala, MARGEM + (maxY - ponto.y) * escala]
@@ -73,7 +76,7 @@ function MapaRota({ posicoes, paradas, feitas, concluido, doca, retorno = [], em
   return (
     <div className="ped-mapa">
       <svg
-        viewBox={`0 0 ${LARGURA} ${altura}`}
+        viewBox={`0 0 ${largura} ${altura}`}
         className="ped-mapa-svg"
         role="img"
         aria-label={`Rota com ${paradas.length} paradas, ${feitas} já coletadas${
