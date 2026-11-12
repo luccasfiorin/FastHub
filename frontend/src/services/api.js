@@ -191,3 +191,29 @@ export function editarUsuario(id, corpo) {
 export function excluirUsuario(id) {
   return requisicao(`/users/${id}`, 'DELETE')
 }
+
+// Coletor (perfil picker) ------------------------------------------------------
+
+// Pedidos do coletor logado. Sem status: abertos (em andamento primeiro, depois pendentes).
+// status: pending | in_progress | completed | cancelled | all
+export function listarMeusPedidos(status) {
+  return requisicao(`/picker/orders${status ? `?status=${status}` : ''}`)
+}
+
+export function iniciarPedido(id) {
+  return requisicao(`/orders/${id}/start`, 'POST')
+}
+
+export function concluirPedido(id) {
+  return requisicao(`/orders/${id}/complete`, 'POST')
+}
+
+// Bipagem de uma unidade. Código diferente do produto do item = divergência (a API responde 422).
+export function biparItem(orderItemId, codigo) {
+  return requisicao('/scan-events', 'POST', { order_item_id: orderItemId, barcode: codigo })
+}
+
+// status: active | paused | offline
+export function mudarMeuStatus(status) {
+  return requisicao('/picker/status', 'POST', { status })
+}
