@@ -6,7 +6,11 @@ import Pedidos from './pages/Pedidos/Pedidos'
 import Mapa from './pages/Mapa/Mapa'
 import Relatorios from './pages/Relatorios/Relatorios'
 import Configuracoes from './pages/Configuracoes/Configuracoes'
+import AreaColetor from './pages/Coletor/AreaColetor'
 import { buscarUsuario, lerToken, sair } from './services/api'
+
+// Perfis que entram no sistema: o gestor usa o painel completo e o coletor, a tela dele.
+const perfisComAcesso = ['manager', 'picker']
 
 function App() {
   const [usuario, setUsuario] = useState(null)
@@ -23,7 +27,7 @@ function App() {
   useEffect(() => {
     if (!lerToken()) return
     buscarUsuario()
-      .then((dados) => setUsuario(dados.role === 'manager' ? dados : null))
+      .then((dados) => setUsuario(perfisComAcesso.includes(dados.role) ? dados : null))
       .catch(() => setUsuario(null))
       .finally(() => setVerificando(false))
   }, [])
@@ -39,6 +43,11 @@ function App() {
 
   if (!usuario) {
     return <Login onEntrar={setUsuario} />
+  }
+
+  // Coletor cai direto na tela dele, sem o menu do gestor.
+  if (usuario.role === 'picker') {
+    return <AreaColetor usuario={usuario} onSair={sairDoSistema} />
   }
 
   if (pagina === 'pedidos') {

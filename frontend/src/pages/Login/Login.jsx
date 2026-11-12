@@ -23,9 +23,10 @@ function Login({ onEntrar }) {
 
     try {
       const logado = await entrar(usuario.trim(), senha)
-      if (logado.role !== 'manager') {
+      // gestor vai para o painel e coletor para a tela dele (o App decide pelo perfil)
+      if (logado.role !== 'manager' && logado.role !== 'picker') {
         await sair()
-        setErro('Este painel é exclusivo do perfil gestor.')
+        setErro('Seu perfil não tem acesso ao sistema.')
         return
       }
       onEntrar(logado)
