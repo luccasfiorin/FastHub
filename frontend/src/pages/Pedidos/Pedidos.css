@@ -751,3 +751,136 @@
   font-size: 13px;
   color: #8a4b00;
 }
+
+/* Botões de status do pedido (Iniciar, Concluir, Cancelar) */
+
+.ped-painel-topo {
+  flex-wrap: wrap;
+}
+
+.ped-painel-topo > div:first-child {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.ped-painel-titulo h2 {
+  white-space: nowrap;
+}
+
+/* sem espaço ao lado do título, os botões descem para a linha de baixo */
+.ped-painel-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ped-btn-primario,
+.ped-btn-perigo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: #323664;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+}
+
+.ped-btn-primario:hover {
+  background: #282b52;
+}
+
+.ped-btn-perigo {
+  background: #c62828;
+}
+
+.ped-btn-perigo:hover {
+  background: #a91f1f;
+}
+
+.ped-btn-secundario.perigo {
+  border-color: #f5c9c9;
+  color: #c62828;
+}
+
+.ped-btn-primario:disabled,
+.ped-btn-perigo:disabled,
+.ped-btn-secundario:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.ped-confirmar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid #f5c9c9;
+  border-radius: 8px;
+  background: #fdf1f1;
+}
+
+.ped-confirmar p {
+  margin: 0;
+  font-size: 13px;
+  color: #22253f;
+}
+
+.ped-confirmar div {
+  display: flex;
+  gap: 8px;
+}
+
+.ped-aviso-status {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  border: 1px solid;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ped-aviso-status.ok {
+  border-color: #b9e2c8;
+  background: #e9f7ee;
+  color: #1e6b3d;
+}
+
+.ped-aviso-status.alerta {
+  border-color: #f1d48a;
+  background: #fff8e1;
+  color: #7a5200;
+}
+
+.ped-aviso-status.erro {
+  border-color: #f0c4c6;
+  background: #fbeaea;
+  color: #b4272c;
+}
+
+.ped-aviso-status button {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .ped-painel-acoes {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}

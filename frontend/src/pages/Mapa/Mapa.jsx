@@ -14,10 +14,11 @@ import {
   listarProdutos,
 } from '../../services/api'
 import { formatarHora } from '../../utils/formatar'
+import { atualizarPeriodicamente } from '../../utils/atualizacao'
 import './Mapa.css'
 
 // Mapa do armazém com dados do banco: posições, produtos guardados, divergências abertas
-// e a rota (calculada no backend) de cada pedido em andamento. Atualiza a cada 30 s.
+// e a rota (calculada no backend) de cada pedido em andamento. Atualiza a cada 5 s, só com a aba visível.
 
 const camadasDoMapa = [
   { id: 'ocupacao', nome: 'Ocupação', icone: 'camadas' },
@@ -134,11 +135,11 @@ function useMapa() {
       }
     }
 
-    buscar()
-    const timer = setInterval(buscar, 30000)
+    // a cada 5 s, só com a aba visível; uma busca lenta não empilha outra por cima
+    const desligar = atualizarPeriodicamente(buscar)
     return () => {
       ativo = false
-      clearInterval(timer)
+      desligar()
     }
   }, [versao])
 
@@ -296,7 +297,7 @@ function Mapa({ usuario, onNavegar, onSair }) {
             <section className="dash-card arm-mapa-card">
               <div className="arm-mapa-topo">
                 <h2>Visão em planta</h2>
-                <span className="arm-atualizado">Atualiza a cada 30 s</span>
+                <span className="arm-atualizado">Atualiza a cada 5 s</span>
               </div>
 
               <PlantaArmazem

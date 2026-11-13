@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { listarPedidos, listarPosicoes } from '../services/api'
+import { atualizarPeriodicamente } from '../utils/atualizacao'
 
-// Carrega os pedidos e as posições do armazém (para desenhar a planta) e atualiza a cada 30 s.
-// Devolve também `recarregar`, para buscar de novo na hora (ex.: depois de um erro).
+// Carrega os pedidos e as posições do armazém (para desenhar a planta) e atualiza a cada 5 s,
+// só enquanto a aba está visível. Devolve também `recarregar`, para buscar de novo na hora
+// (ex.: depois de um erro ou de mudar o status de um pedido).
 export function usePedidos() {
   const [pedidos, setPedidos] = useState(null)
   const [posicoes, setPosicoes] = useState([])
@@ -11,26 +13,33 @@ export function usePedidos() {
   const [versao, setVersao] = useState(0)
 
   useEffect(() => {
+    let ativo = true
+
     function buscar() {
       // as posições só servem para o desenho: se falharem, a tela continua com os pedidos
-      listarPosicoes()
-        .then(setPosicoes)
-        .catch(() => setPosicoes([]))
+      const posicoesBuscadas = listarPosicoes()
+        .then((lista) => ativo && setPosicoes(lista))
+        .catch(() => ativo && setPosicoes([]))
 
-      listarPedidos()
+      const pedidosBuscados = listarPedidos()
         .then((resposta) => {
+          if (!ativo) return
           setPedidos(resposta)
           setErro('')
         })
-        .catch((e) => setErro(e.message))
-        .finally(() => setCarregando(false))
+        .catch((e) => ativo && setErro(e.message))
+        .finally(() => ativo && setCarregando(false))
+
+      return Promise.all([posicoesBuscadas, pedidosBuscados])
     }
 
-    buscar()
-    const timer = setInterval(buscar, 30000)
+    const desligar = atualizarPeriodicamente(buscar)
 
-    // quando a tela fecha (ou `versao` muda), para o relógio antigo
-    return () => clearInterval(timer)
+    // quando a tela fecha (ou `versao` muda), para o relógio antigo e ignora respostas atrasadas
+    return () => {
+      ativo = false
+      desligar()
+    }
   }, [versao])
 
   function recarregar() {

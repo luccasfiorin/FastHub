@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { buscarDashboard, listarColetores, listarPedidos, listarPosicoes } from '../services/api'
+import { atualizarPeriodicamente } from '../utils/atualizacao'
 
 // Dados da tela Início: indicadores do dia (GET /dashboard), pedidos (GET /orders),
 // coletores e alertas (GET /pickers) e as posições para desenhar a planta (GET /locations).
-// Atualiza sozinho a cada 30 s.
+// Atualiza sozinho a cada 5 s, só enquanto a aba está visível.
 export function useDashboard() {
   const [dados, setDados] = useState(null)
   const [posicoes, setPosicoes] = useState([])
@@ -20,7 +21,7 @@ export function useDashboard() {
       .catch(() => ativo && setPosicoes([]))
 
     function buscar() {
-      Promise.all([buscarDashboard(), listarPedidos(), listarColetores()])
+      return Promise.all([buscarDashboard(), listarPedidos(), listarColetores()])
         .then(([indicadores, pedidos, coletores]) => {
           if (!ativo) return
           setDados({ indicadores, pedidos, coletores })
@@ -30,12 +31,11 @@ export function useDashboard() {
         .finally(() => ativo && setCarregando(false))
     }
 
-    buscar()
-    const timer = setInterval(buscar, 30000)
+    const desligar = atualizarPeriodicamente(buscar)
 
     return () => {
       ativo = false
-      clearInterval(timer)
+      desligar()
     }
   }, [versao])
 

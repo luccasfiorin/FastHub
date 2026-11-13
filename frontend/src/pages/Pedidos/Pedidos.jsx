@@ -4,6 +4,7 @@ import Header from '../../components/Header'
 import Icone from '../../components/Icone'
 import MapaRota from './MapaRota'
 import NovoPedido from './NovoPedido'
+import { AvisosStatus, BotoesStatus, useAcoesStatus } from './AcoesStatus'
 import { usePedidos } from '../../hooks/usePedidos'
 import { buscarRotaPedido } from '../../services/api'
 import { formatarHora } from '../../utils/formatar'
@@ -66,7 +67,7 @@ function passaNoFiltro(pedido, filtro) {
 }
 
 // Rota do pedido selecionado, calculada no backend (RF04) e buscada de novo quando o pedido
-// muda (a lista atualiza a cada 30 s). Devolve { rota, erro }; rota fica null até a resposta chegar.
+// muda (a lista atualiza a cada 5 s). Devolve { rota, erro }; rota fica null até a resposta chegar.
 function useRotaPedido(pedido) {
   const [resposta, setResposta] = useState(null)
   const [erro, setErro] = useState('')
@@ -277,11 +278,13 @@ function Pedidos({ usuario, onNavegar, onSair }) {
 
               {selecionado && rota ? (
                 <PainelRota
+                  key={selecionado.id}
                   pedido={selecionado}
                   rota={rota}
                   posicoes={posicoes}
                   verTodas={verTodasParadas}
                   onVerTodas={() => setVerTodasParadas(!verTodasParadas)}
+                  onStatusMudou={recarregar}
                 />
               ) : (
                 <section className="dash-card ped-painel ped-painel-vazio">
@@ -303,7 +306,8 @@ function Pedidos({ usuario, onNavegar, onSair }) {
   )
 }
 
-function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
+function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas, onStatusMudou }) {
+  const acoesStatus = useAcoesStatus(pedido, onStatusMudou)
   const status = situacao(pedido)
   const itens = contarItens(pedido)
   const concluido = pedido.status === 'completed'
@@ -337,11 +341,16 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas }) {
             {pedido.requires_forklift && ' · precisa de empilhadeira'}
           </p>
         </div>
-        <button type="button" className="ped-btn-secundario" title="Em breve">
-          <Icone nome="usuario" tamanho={15} />
-          {pedido.picker ? 'Trocar coletor' : 'Atribuir coletor'}
-        </button>
+        <div className="ped-painel-acoes">
+          <BotoesStatus pedido={pedido} acoes={acoesStatus} />
+          <button type="button" className="ped-btn-secundario" title="Em breve">
+            <Icone nome="usuario" tamanho={15} />
+            {pedido.picker ? 'Trocar coletor' : 'Atribuir coletor'}
+          </button>
+        </div>
       </div>
+
+      <AvisosStatus pedido={pedido} numero={numeroPedido(pedido)} acoes={acoesStatus} />
 
       <dl className="ped-numeros">
         <div>
