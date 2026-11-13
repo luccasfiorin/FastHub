@@ -208,6 +208,11 @@ export function concluirPedido(id) {
   return requisicao(`/orders/${id}/complete`, 'POST')
 }
 
+// Só o gestor cancela. Pedido concluído ou já cancelado responde 409.
+export function cancelarPedido(id) {
+  return requisicao(`/orders/${id}/cancel`, 'POST')
+}
+
 // Bipagem de uma unidade. Código diferente do produto do item = divergência (a API responde 422).
 export function biparItem(orderItemId, codigo) {
   return requisicao('/scan-events', 'POST', { order_item_id: orderItemId, barcode: codigo })
