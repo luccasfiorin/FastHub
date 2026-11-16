@@ -436,6 +436,7 @@ function Dashboard({ usuario, onNavegar, onSair }) {
                   doca={rota.doca}
                   retorno={rota.retorno}
                   empilhadeira={rota.empilhadeira}
+                  ajustarLargura
                 />
               ) : (
                 <p className="dash-vazio">{selecionada ? 'Calculando a rota...' : 'Selecione um pedido para ver a rota.'}</p>

@@ -621,6 +621,8 @@
 .dash-mapa {
   display: flex;
   flex-direction: column;
+  /* só a altura do conteúdo; sem isso o card estica até a altura da tabela de pedidos */
+  align-self: start;
   padding: 22px 22px 18px;
   border-color: #323664;
   background: #323664;
@@ -1368,4 +1370,9 @@
   .dash-alertas {
     width: 260px;
   }
+}
+
+/* mapa da rota no Início: ocupa a largura do card, sem ficar mais alto que a tela */
+.dash-mapa .ped-mapa-svg {
+  max-height: 520px;
 }
