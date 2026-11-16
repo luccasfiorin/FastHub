@@ -86,13 +86,13 @@ mesmo ritmo. Pela mesma conta, ficaria em torno de 0,3 s com 15 paradas, 3 s com
 - **Fica perto do ótimo:** em média, até 2,3% acima da melhor rota possível nos tamanhos em que dá para
   comparar. O vizinho mais próximo sozinho fica de 6% a 15% acima, e corredor por corredor, de 20% a 39%.
 - **Atende o RNF04 com folga:** até 50 paradas, o cálculo leva cerca de 1 ms. A requisição inteira é
-  dominada pelas 5 consultas ao banco (número fixo, não cresce com o pedido).
+  dominada pelas consultas ao banco, que são em número fixo e não crescem com o pedido.
 - **O tempo é previsível:** não explode com pedidos grandes, ao contrário do ótimo exato. O 2-opt tem limite
   de 50 passadas.
 - **É determinístico:** o mesmo pedido sempre gera a mesma rota, porque as paradas são ordenadas pelo id da
   posição antes do cálculo. O coletor não vê a rota mudar sozinha entre uma atualização e outra.
-- **Continua a regra que o frontend já usava:** a ordem do vizinho mais próximo, só que melhorada. A tela
-  de Pedidos agora desenha a rota que vem do backend e só calcula sozinha se a API falhar.
+- **Um cálculo só:** a rota é calculada apenas no backend. Os mapas do frontend desenham o traçado que vem
+  da API e não recalculam nada.
 
 ### Descartadas
 
@@ -106,11 +106,10 @@ mesmo ritmo. Pela mesma conta, ficaria em torno de 0,3 s com 15 paradas, 3 s com
 
 ## Limitações e próximos passos
 
-- **A distância é uma aproximação.** Manhattan supõe que dá para atravessar de um corredor para outro em
-  qualquer altura. Num armazém real, a estante bloqueia e só se troca de corredor nas pontas (corredores
-  transversais). Nessa situação, corredor por corredor costuma se sair melhor do que aparece aqui. Quando a
-  planta real tiver os corredores transversais cadastrados, a função `distancia()` do `RouteService` deve
-  passar a considerá-los. O resto do algoritmo não muda.
+- **Corredores transversais (já aplicado).** A simulação acima usou `|dx| + |dy|`, como se desse para
+  atravessar de um corredor para outro em qualquer altura. Hoje a `distancia()` do `RouteService` só deixa
+  trocar de corredor pelas travessas (a frente do armazém e o vão entre prateleiras). Com essa regra,
+  corredor por corredor tende a se sair melhor do que nas tabelas; vale repetir a comparação.
 - **Os pedidos da simulação são aleatórios.** Com o histórico real de pedidos, vale repetir a comparação.
 - **A expedição é fixa por configuração.** Se houver mais de uma doca, ela deve vir do pedido.
 - **Itens grandes (RN04):** itens de produtos com `requires_forklift` saem da rota a pé e formam uma
