@@ -63,7 +63,13 @@ export function BotoesStatus({ pedido, acoes: estado }) {
   return (
     <>
       {pendente && (
-        <button type="button" className="ped-btn-primario" onClick={() => executar('iniciar')} disabled={ocupado}>
+        <button
+          type="button"
+          className="ped-btn-primario"
+          onClick={() => executar('iniciar')}
+          disabled={ocupado || !pedido.picker}
+          title={pedido.picker ? undefined : 'Atribua um coletor antes de iniciar'}
+        >
           <Icone nome="play" tamanho={14} />
           {executando === 'iniciar' ? 'Iniciando...' : 'Iniciar'}
         </button>

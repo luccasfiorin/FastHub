@@ -109,6 +109,11 @@ export function excluirColetor(id) {
   return requisicao(`/pickers/${id}`, 'DELETE')
 }
 
+// Atribui, troca ou remove (null) o coletor de um pedido pendente. Só o gestor.
+export function atribuirColetor(pedidoId, coletorId) {
+  return requisicao(`/orders/${pedidoId}`, 'PATCH', { picker_id: coletorId })
+}
+
 export function listarPedidos() {
   return requisicao('/orders')
 }

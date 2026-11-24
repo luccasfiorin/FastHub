@@ -170,8 +170,9 @@
 
 .ped-painel-titulo {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 6px 12px;
 }
 
 .ped-painel-titulo h2 {
@@ -883,4 +884,28 @@
     flex-wrap: wrap;
     justify-content: flex-start;
   }
+}
+
+.ped-acao {
+  cursor: pointer;
+}
+
+.ped-confirmar select {
+  margin-left: 8px;
+  padding: 6px 8px;
+  border: 1px solid #d8dbe6;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.ped-erro-atribuir {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: #c62828;
+}
+
+.ped-confirmar.neutro {
+  border-color: #e3e5ee;
+  background: #f7f8fb;
 }

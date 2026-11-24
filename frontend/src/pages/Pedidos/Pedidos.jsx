@@ -6,7 +6,7 @@ import MapaRota from './MapaRota'
 import NovoPedido from './NovoPedido'
 import { AvisosStatus, BotoesStatus, useAcoesStatus } from './AcoesStatus'
 import { usePedidos } from '../../hooks/usePedidos'
-import { buscarRotaPedido } from '../../services/api'
+import { atribuirColetor, buscarRotaPedido, listarColetores } from '../../services/api'
 import { formatarHora } from '../../utils/formatar'
 import { posicoesDaApi, rotaDaApi } from '../../utils/rotaApi'
 import './Pedidos.css'
@@ -108,6 +108,7 @@ function Pedidos({ usuario, onNavegar, onSair }) {
   const [verTodasParadas, setVerTodasParadas] = useState(false)
   const [novoAberto, setNovoAberto] = useState(false)
   const [avisoCriado, setAvisoCriado] = useState('')
+  const [atribuindo, setAtribuindo] = useState(false)
 
   const pedidos = useMemo(
     () => [...recebidos].sort((a, b) => (ordemStatus[a.status] ?? 9) - (ordemStatus[b.status] ?? 9) || b.id - a.id),
@@ -141,6 +142,7 @@ function Pedidos({ usuario, onNavegar, onSair }) {
   function selecionar(pedido) {
     setSelecionadoId(pedido.id)
     setVerTodasParadas(false)
+    setAtribuindo(false)
   }
 
   // pedido recém-criado: limpa filtro e busca para ele aparecer na lista e já abre a rota dele
@@ -257,8 +259,16 @@ function Pedidos({ usuario, onNavegar, onSair }) {
                               {itens.total} itens · {pedido.picker?.name ?? 'sem coletor'}
                             </span>
                             {pedido.status === 'pending' ? (
-                              <span className="ped-acao">
-                                {pedido.requires_forklift ? 'Liberar para empilhadeira' : 'Atribuir coletor'} →
+                              <span
+                                className="ped-acao"
+                                onClick={(e) => {
+                                  // abre a atribuição no painel em vez de só selecionar
+                                  e.stopPropagation()
+                                  selecionar(pedido)
+                                  setAtribuindo(true)
+                                }}
+                              >
+                                {pedido.picker ? 'Trocar coletor' : 'Atribuir coletor'} →
                               </span>
                             ) : (
                               <span className="dash-progresso">
@@ -285,6 +295,8 @@ function Pedidos({ usuario, onNavegar, onSair }) {
                   verTodas={verTodasParadas}
                   onVerTodas={() => setVerTodasParadas(!verTodasParadas)}
                   onStatusMudou={recarregar}
+                  atribuindo={atribuindo}
+                  onAtribuindo={setAtribuindo}
                 />
               ) : (
                 <section className="dash-card ped-painel ped-painel-vazio">
@@ -306,7 +318,7 @@ function Pedidos({ usuario, onNavegar, onSair }) {
   )
 }
 
-function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas, onStatusMudou }) {
+function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas, onStatusMudou, atribuindo, onAtribuindo }) {
   const acoesStatus = useAcoesStatus(pedido, onStatusMudou)
   const status = situacao(pedido)
   const itens = contarItens(pedido)
@@ -343,12 +355,25 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas, onStatusMudo
         </div>
         <div className="ped-painel-acoes">
           <BotoesStatus pedido={pedido} acoes={acoesStatus} />
-          <button type="button" className="ped-btn-secundario" title="Em breve">
-            <Icone nome="usuario" tamanho={15} />
-            {pedido.picker ? 'Trocar coletor' : 'Atribuir coletor'}
-          </button>
+          {pedido.status === 'pending' && (
+            <button type="button" className="ped-btn-secundario" onClick={() => onAtribuindo(!atribuindo)}>
+              <Icone nome="usuario" tamanho={15} />
+              {pedido.picker ? 'Trocar coletor' : 'Atribuir coletor'}
+            </button>
+          )}
         </div>
       </div>
+
+      {atribuindo && pedido.status === 'pending' && (
+        <AtribuirColetor
+          pedido={pedido}
+          onFechar={() => onAtribuindo(false)}
+          onSalvo={() => {
+            onAtribuindo(false)
+            onStatusMudou()
+          }}
+        />
+      )}
 
       <AvisosStatus pedido={pedido} numero={numeroPedido(pedido)} acoes={acoesStatus} />
 
@@ -485,3 +510,63 @@ function PainelRota({ pedido, rota, posicoes, verTodas, onVerTodas, onStatusMudo
 }
 
 export default Pedidos
+
+// Escolha do coletor de um pedido pendente (PATCH /orders/{id}). Pedido com item grande
+// mostra primeiro os operadores de empilhadeira.
+function AtribuirColetor({ pedido, onFechar, onSalvo }) {
+  const [coletores, setColetores] = useState(null)
+  const [escolhido, setEscolhido] = useState(pedido.picker?.id ? String(pedido.picker.id) : '')
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    listarColetores()
+      .then((dados) => {
+        const lista = [...dados.pickers]
+        if (pedido.requires_forklift) lista.sort((a, b) => (b.picker_type === 'forklift') - (a.picker_type === 'forklift'))
+        setColetores(lista)
+      })
+      .catch((e) => setErro(e.message))
+  }, [pedido.requires_forklift])
+
+  async function salvar(e) {
+    e.preventDefault()
+    setSalvando(true)
+    setErro('')
+    try {
+      await atribuirColetor(pedido.id, escolhido ? Number(escolhido) : null)
+      onSalvo()
+    } catch (err) {
+      setErro(err.message)
+      setSalvando(false)
+    }
+  }
+
+  const nomesStatus = { active: 'ativo', paused: 'em pausa', offline: 'offline' }
+
+  return (
+    <form className="ped-confirmar neutro" onSubmit={salvar} aria-label="Atribuir coletor">
+      <label>
+        Coletor do pedido{' '}
+        <select value={escolhido} onChange={(e) => setEscolhido(e.target.value)} disabled={!coletores} autoFocus>
+          <option value="">{coletores ? 'Sem coletor' : 'Carregando...'}</option>
+          {coletores?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+              {c.picker_type === 'forklift' ? ' · empilhadeira' : ''} ({nomesStatus[c.status] ?? c.status})
+            </option>
+          ))}
+        </select>
+      </label>
+      <div>
+        <button type="button" className="ped-btn-secundario" onClick={onFechar}>
+          Voltar
+        </button>
+        <button type="submit" className="ped-btn-primario" disabled={salvando || !coletores}>
+          {salvando ? 'Salvando...' : 'Salvar'}
+        </button>
+      </div>
+      {erro && <p className="ped-erro-atribuir">{erro}</p>}
+    </form>
+  )
+}
