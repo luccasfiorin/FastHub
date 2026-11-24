@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PickerBreak;
 use App\Models\ScanEvent;
+use Carbon\CarbonInterface;
 
 /**
  * Calcula as métricas dos coletores a partir do banco.
@@ -13,7 +14,7 @@ use App\Models\ScanEvent;
  * Regras adotadas (confirmar com a Telecontrol):
  * - itens: soma de picked_quantity dos itens coletados no período;
  * - tempo ativo: tempo entre a primeira e a última bipagem, menos as pausas;
- * - itens/h: itens dividido pelo tempo ativo em horas (precisa de bipagens);
+ * - itens/h: itens dividido pelo tempo ativo em horas (exige tempo ativo mínimo de 10 min);
  * - acurácia: bipagens ok dividido pelo total de bipagens;
  * - tempo ocioso: tempo em pausa dividido pelo tempo entre a primeira e a última bipagem;
  * - distância: soma da distância pelos corredores (a mesma do RouteService) entre as
@@ -21,6 +22,8 @@ use App\Models\ScanEvent;
  */
 class PickerMetrics
 {
+    private const TEMPO_MINIMO_ATIVO_SEGUNDOS = 600; // 10 minutos
+
     public function __construct(private RouteService $routes) {}
 
     /** Devolve [início, fim] do período: today, week ou month. */
@@ -39,7 +42,7 @@ class PickerMetrics
     }
 
     /** Devolve um array com as métricas de cada coletor, indexado pelo id dele. */
-    public function between($start, $end): array
+    public function between(CarbonInterface|string $start, CarbonInterface|string $end): array
     {
         $dados = [];
 
@@ -132,11 +135,12 @@ class PickerMetrics
             if ($d['primeira'] !== null) {
                 $intervalo = $d['ultima'] - $d['primeira'];
             }
-            $ativo = $intervalo - $d['pausa'];
+            $ativo = max(0, $intervalo - $d['pausa']);
             $totalBipagens = $d['ok'] + $d['divergencias'];
 
+            // CORREÇÃO: Exigir tempo ativo mínimo de 10 minutos (600s) para calcular itens/h
             $itensPorHora = null;
-            if ($ativo > 0) {
+            if ($ativo >= self::TEMPO_MINIMO_ATIVO_SEGUNDOS) {
                 $itensPorHora = round($d['itens'] / ($ativo / 3600), 1);
             }
 
@@ -155,7 +159,7 @@ class PickerMetrics
                 'distance_km' => round($d['metros'] / 1000, 2),
                 'span_seconds' => $intervalo,
                 'break_seconds' => $d['pausa'],
-                'active_seconds' => max(0, $ativo),
+                'active_seconds' => $ativo,
             ];
         }
 
@@ -174,7 +178,7 @@ class PickerMetrics
         $km = 0;
 
         foreach ($porColetor as $m) {
-            if ($m['active_seconds'] > 0) {
+            if ($m['active_seconds'] >= self::TEMPO_MINIMO_ATIVO_SEGUNDOS) {
                 $itens += $m['items'];
                 $segundosAtivos += $m['active_seconds'];
             }
@@ -186,7 +190,7 @@ class PickerMetrics
         }
 
         $itensPorHora = null;
-        if ($segundosAtivos > 0) {
+        if ($segundosAtivos >= self::TEMPO_MINIMO_ATIVO_SEGUNDOS) {
             $itensPorHora = round($itens / ($segundosAtivos / 3600), 1);
         }
 

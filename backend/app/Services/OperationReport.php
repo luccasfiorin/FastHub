@@ -21,6 +21,8 @@ use Illuminate\Support\Collection;
  */
 class OperationReport
 {
+    private const TEMPO_MINIMO_ATIVO_SEGUNDOS = 600; // 10 minutos
+
     public function __construct(
         private PickerMetrics $metrics,
         private RouteService $routes,
@@ -49,7 +51,7 @@ class OperationReport
         $ok = 0;
         $divergencias = 0;
         foreach ($this->byPicker($start, $end) as $m) {
-            if ($m['active_seconds'] > 0) {
+            if ($m['active_seconds'] >= self::TEMPO_MINIMO_ATIVO_SEGUNDOS) {
                 $itens += $m['items'];
                 $segundos += $m['active_seconds'];
             }
@@ -70,11 +72,7 @@ class OperationReport
     }
 
     /**
-     * Métricas de cada coletor no período, somadas dia a dia. O PickerMetrics mede o tempo
-     * ativo entre a primeira e a última bipagem; num período de vários dias isso incluiria
-     * as noites, então cada dia é medido separado e depois somado.
-     *
-     * @return array<int, array{items: int, active_seconds: int, ok: int, mismatches: int}>
+     * Métricas de cada coletor no período, somadas dia a dia.
      */
     public function byPicker(CarbonInterface $start, CarbonInterface $end): array
     {
@@ -150,10 +148,7 @@ class OperationReport
     }
 
     /**
-     * Pedidos concluídos por hora num dia, da primeira hora com movimento até a última
-     * (no dia de hoje, até a hora atual).
-     *
-     * @return list<array{hour: int, orders: int}>
+     * Pedidos concluídos por hora num dia.
      */
     public function hourly(CarbonInterface $day): array
     {
@@ -181,7 +176,7 @@ class OperationReport
         return $linhas;
     }
 
-    /** Itens por hora de cada coletor no período (só quem teve bipagem). */
+    /** Itens por hora de cada coletor no período (exige tempo ativo mínimo de 10 min). */
     public function pickers(CarbonInterface $start, CarbonInterface $end): array
     {
         $porColetor = $this->byPicker($start, $end);
@@ -190,7 +185,7 @@ class OperationReport
         $linhas = [];
         foreach ($porColetor as $id => $m) {
             $coletor = $nomes->get($id);
-            if ($coletor === null || $m['active_seconds'] <= 0) {
+            if ($coletor === null || $m['active_seconds'] < self::TEMPO_MINIMO_ATIVO_SEGUNDOS) {
                 continue;
             }
             $bipagens = $m['ok'] + $m['mismatches'];
@@ -209,25 +204,28 @@ class OperationReport
         return $linhas;
     }
 
-    /**
-     * Divergências de bipagem do período, as mais recentes primeiro.
-     * Situação: "open" enquanto o pedido está aberto, "resolved" depois que foi concluído
-     * e "cancelled" se o pedido foi cancelado.
-     */
+    /** Divergências de bipagem do período. */
     public function occurrences(CarbonInterface $start, CarbonInterface $end, ?int $limit = null): array
     {
-        return ScanEvent::query()
+        $query = ScanEvent::query()
             ->where('type', 'mismatch')
             ->whereBetween('scanned_at', [$start, $end])
             ->with(['picker:id,name', 'order:id,order_number,status', 'orderItem.product:id,name,sku', 'orderItem.location.aisle:id,code'])
-            ->orderByDesc('scanned_at')
-            ->when($limit, fn ($q) => $q->limit($limit))
-            ->get()
-            ->map(fn (ScanEvent $e) => $this->occurrence($e))
+            ->orderByDesc('scanned_at');
+
+        if ($limit) {
+            $query->limit($limit);
+        }
+
+        return collect($query->getModels())
+            ->map(fn ($e) => $this->occurrence($e))
             ->all();
     }
 
-    public function occurrence(ScanEvent $e): array
+    /**
+     * @param ScanEvent $e
+     */
+    public function occurrence($e): array
     {
         $situacao = match ($e->order?->status) {
             'completed' => 'resolved',

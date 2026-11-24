@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
  *    └──────cancel────────┴──▶ cancelled
  *
  * - Iniciar: o coletor inicia um pedido dele ou um sem coletor (e fica com ele);
- *   o gestor pode iniciar qualquer pedido.
+ *   o gestor pode iniciar qualquer pedido (desde que tenha coletor atribuído).
  * - Concluir: só com todos os itens coletados. Coletor dono do pedido ou gestor.
  * - Cancelar: só o gestor. Pedido concluído não pode ser cancelado.
  * Transição inválida para o status atual responde 409.
@@ -31,6 +31,13 @@ class OrderStatusController extends Controller
         // Trava a linha: dois coletores não iniciam o mesmo pedido ao mesmo tempo.
         return DB::transaction(function () use ($order, $user) {
             $order = Order::lockForUpdate()->findOrFail($order->id);
+
+            // CORREÇÃO 1: Gestor não pode iniciar pedido sem coletor atribuído
+            if ($user->role === 'manager' && $order->picker_id === null) {
+                return response()->json([
+                    'message' => 'Não é possível iniciar um pedido sem um coletor atribuído.',
+                ], 422);
+            }
 
             if ($user->role === 'picker' && $order->picker_id !== null && (int) $order->picker_id !== (int) $user->id) {
                 return $this->negado();
@@ -48,6 +55,45 @@ class OrderStatusController extends Controller
 
             return $this->resposta($order);
         });
+    }
+
+    /**
+     * CORREÇÃO 2: Atribuir, trocar ou remover o coletor do pedido (Apenas gestor, pedido pendente).
+     */
+    public function updatePicker(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($user->role !== 'manager') {
+            return response()->json(['message' => 'Apenas o gestor pode gerenciar o coletor do pedido.'], 403);
+        }
+
+        if ($order->status !== 'pending') {
+            return response()->json([
+                'message' => 'Não é possível alterar o coletor de um pedido que já está em andamento.',
+                'status' => $order->status,
+            ], 409);
+        }
+
+        $dados = $request->validate([
+            'picker_id' => 'nullable|exists:users,id',
+        ]);
+
+        // Validar se o usuário informado é realmente um coletor (role === 'picker')
+        if (!empty($dados['picker_id'])) {
+            $picker = User::find($dados['picker_id']);
+            if (!$picker || $picker->role !== 'picker') {
+                return response()->json([
+                    'message' => 'O usuário selecionado deve ter o perfil de coletor.',
+                ], 422);
+            }
+        }
+
+        $order->update([
+            'picker_id' => $dados['picker_id'] ?? null,
+        ]);
+
+        return $this->resposta($order);
     }
 
     public function complete(Request $request, Order $order): JsonResponse

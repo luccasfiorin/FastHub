@@ -54,6 +54,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/pickers/ranking', [PickerController::class, 'ranking']);
         Route::apiResource('pickers', PickerController::class)->except(['show']);
+
+        // Atualização de coletor do pedido (apenas gestor)
+        Route::patch('/orders/{order}', [OrderStatusController::class, 'updatePicker']);
+        Route::apiResource('orders', OrderController::class)->only(['index', 'store']);
     });
 
     Route::middleware('role:picker')->group(function () {
@@ -64,9 +68,5 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/picker/status', [PickerController::class, 'updateOwnStatus']);
         Route::get('/picker/orders', [PickerOrderController::class, 'index']);
         Route::post('/scan-events', [ScanEventController::class, 'store']);
-    });
-
-    Route::middleware(['auth:sanctum', 'role:manager'])->group(function () {
-        Route::apiResource('orders', OrderController::class)->only(['index', 'store']);
     });
 });
