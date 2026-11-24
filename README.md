@@ -299,18 +299,3 @@ php artisan test
 Os testes cobrem a rota de coleta (ordem, travessas, empilhadeira, traçado),
 o ciclo do pedido, a bipagem, as métricas, os relatórios, as configurações e
 os usuários. Rodam com SQLite em memória e não tocam no banco local.
-
-## Limitações e próximos passos
-
-- **Configurações:** doca, limites da empilhadeira, máximo de itens por rota e
-  agrupamento de pedidos ficam salvos, mas ainda não mudam o cálculo da rota.
-- **Cadastro do armazém:** corredores, posições e produtos só podem ser criados
-  de dentro do Novo pedido; ainda não há tela para editar ou excluir (a API já
-  permite).
-- **Estoque:** o banco não guarda quantidade por posição. No Mapa, "ocupada"
-  quer dizer "tem produto cadastrado".
-- **Planilha do relatório:** traz só a série por dia (ou por hora); os itens por
-  hora de cada coletor e as ocorrências de bipagem ficam no PDF.
-- **Ainda desabilitados:** "Ver no mapa", "Ver histórico" e "Enviar mensagem" na
-  tela de Coletores; Notificações e Dispositivos em Configurações; "Esqueci
-  minha senha" no login.
