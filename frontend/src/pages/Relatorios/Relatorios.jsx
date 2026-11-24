@@ -188,7 +188,8 @@ function baixarPlanilha(nomeArquivo, linhas) {
   link.href = URL.createObjectURL(arquivo)
   link.download = nomeArquivo
   link.click()
-  URL.revokeObjectURL(link.href)
+  // liberar na hora cancela o download no Safari e no Firefox
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000)
 }
 
 function textoVariacao(atual, anterior, comparacao) {
@@ -353,6 +354,7 @@ function Relatorios({ usuario, onNavegar, onSair }) {
                     />
                   </label>
                   {erroPeriodo && <span className="rel-erro">{erroPeriodo}</span>}
+                  <span className="rel-intervalo rel-so-impressao">{textoIntervalo}</span>
                 </div>
               ) : (
                 <span className="rel-intervalo">{textoIntervalo}</span>
@@ -410,7 +412,6 @@ function Conteudo({ periodo, textos, atual, anterior, verTodas, onVerTodas, busc
       (o.picker ?? '').toLowerCase().includes(busca) ||
       (o.location ?? '').toLowerCase().includes(busca),
   )
-  const listaOcorrencias = verTodas ? ocorrencias : ocorrencias.slice(0, OCORRENCIAS_VISIVEIS)
   const classe = (positivo) => (positivo == null ? '' : positivo ? 'positivo' : 'negativo')
 
   return (
@@ -490,7 +491,7 @@ function Conteudo({ periodo, textos, atual, anterior, verTodas, onVerTodas, busc
           </p>
 
           {atual.pickers.length === 0 ? (
-            <p className="dash-vazio">Nenhuma bipagem nesse período.</p>
+            <p className="dash-vazio">Nenhum coletor com pelo menos 10 minutos de coleta nesse período.</p>
           ) : (
             <ul className="rel-coletores" style={{ '--meta': meta / 100 }}>
               {atual.pickers.map((coletor) => (
@@ -534,10 +535,11 @@ function Conteudo({ periodo, textos, atual, anterior, verTodas, onVerTodas, busc
                   </tr>
                 </thead>
                 <tbody>
-                  {listaOcorrencias.map((o) => {
+                  {ocorrencias.map((o, i) => {
                     const situacao = nomesSituacao[o.status] ?? nomesSituacao.open
+                    const escondida = !verTodas && i >= OCORRENCIAS_VISIVEIS
                     return (
-                      <tr key={o.id}>
+                      <tr key={o.id} className={escondida ? 'rel-so-impressao' : undefined}>
                         <td className="rel-cinza">
                           {new Date(o.at).toLocaleString('pt-BR', {
                             day: '2-digit',

@@ -541,7 +541,24 @@
 }
 
 /* Exportar PDF usa a impressão do navegador: some com o menu e os botões */
+.rel-so-impressao {
+  display: none;
+}
+
 @media print {
+  .rel-periodos,
+  .rel-datas label {
+    display: none !important;
+  }
+
+  tr.rel-so-impressao {
+    display: table-row;
+  }
+
+  span.rel-so-impressao {
+    display: inline;
+  }
+
   .dashboard {
     display: block;
     background: #fff;
