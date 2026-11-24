@@ -34,10 +34,10 @@ São duas interfaces sobre a mesma API:
 | Tela          | O que faz |
 | ------------- | --------- |
 | Início        | Indicadores do dia comparados com ontem no mesmo horário (pedidos separados, em andamento, tempo por item, acurácia), pedidos de hoje com a rota no mapa, eficiência de rota, pedidos de empilhadeira, última divergência, pedidos por hora e situação dos coletores. |
-| Pedidos       | Lista com filtros (aguardando, em andamento, concluídos, com divergência, empilhadeira), rota de cada pedido a pé e de empilhadeira, novo pedido e botões de iniciar, concluir e cancelar. |
+| Pedidos       | Lista com filtros (aguardando, em andamento, concluídos, com divergência, empilhadeira), rota de cada pedido a pé e de empilhadeira, novo pedido, atribuição ou troca do coletor e botões de iniciar, concluir e cancelar. Só é possível iniciar um pedido que já tem coletor. |
 | Mapa          | Planta do armazém com as posições, os produtos guardados, as divergências abertas e a rota de cada coletor em andamento, com a posição atual dele. |
 | Coletores     | Cards com status e métricas do dia de cada coletor, ranking por dia, semana ou mês e cadastro de coletores. |
-| Relatórios    | Indicadores de um período comparados com o período anterior, pedidos por dia ou por hora, distância por pedido, itens por hora por coletor contra a meta e ocorrências de bipagem. Exporta CSV e PDF. |
+| Relatórios    | Indicadores de um período comparados com o período anterior, pedidos por dia ou por hora, distância por pedido, itens por hora por coletor contra a meta e ocorrências de bipagem. Exporta a planilha (CSV com a série por dia, ou por hora no período "Hoje") e o PDF, pela impressão do navegador. |
 | Configurações | Dados do armazém, regras de rota e usuários de todos os perfis. |
 
 Início, Pedidos e Mapa se atualizam sozinhos a cada 5 segundos, só enquanto a
@@ -142,8 +142,8 @@ das bipagens, pausas e pedidos gravados no banco.
 | -------------------- | ----- |
 | Pedidos separados    | Pedidos concluídos no período. |
 | Tempo ativo          | Da primeira à última bipagem do dia, menos as pausas. Em períodos de vários dias, soma dia a dia. |
-| Itens por hora       | Unidades coletadas divididas pelo tempo ativo. |
-| Tempo por item       | Tempo ativo dividido pelas unidades coletadas. |
+| Itens por hora       | Unidades coletadas divididas pelo tempo ativo. Só é calculado com pelo menos 10 minutos de tempo ativo; antes disso aparece "—", para poucas bipagens seguidas não gerarem números absurdos. |
+| Tempo por item       | Tempo ativo dividido pelas unidades coletadas, com o mesmo mínimo de 10 minutos. |
 | Acurácia             | Bipagens corretas divididas pelo total de bipagens. |
 | Distância percorrida | Soma da distância pelos corredores entre as posições coletadas em sequência no mesmo pedido. |
 | Status do coletor    | Ativo, em pausa ou offline. Sem sinal por mais de 10 minutos, vira offline. |
@@ -236,15 +236,17 @@ ao momento em que o seed roda, então o "hoje" das telas sempre tem movimento.
    10 minutos sem sinal, os coletores do exemplo aparecem como offline.
 2. Abra duas janelas: o gestor no Mapa do armazém e o coletor
    (`coletor@fasthub.com`) no celular ou numa janela estreita.
-3. No coletor, abra Pedidos, inicie o primeiro da fila e vá para Coleta.
-4. Bipe um código qualquer para mostrar a divergência: ela aparece no coletor
+3. No gestor, em Pedidos, use "Atribuir coletor" num pedido "Sem coletor" e
+   escolha o `coletor@fasthub.com`: o pedido aparece na fila dele.
+4. No coletor, abra Pedidos, inicie o primeiro da fila e vá para Coleta.
+5. Bipe um código qualquer para mostrar a divergência: ela aparece no coletor
    e, em até 5 segundos, no Mapa e no Início do gestor.
-5. Bipe os itens tocando no código de barras de cada um. A cada parada, o
+6. Bipe os itens tocando no código de barras de cada um. A cada parada, o
    marcador do coletor e a linha da rota avançam no Mapa do gestor.
-6. Conclua o pedido e mostre o Início e os Relatórios atualizados.
+7. Conclua o pedido e mostre o Início e os Relatórios atualizados.
 
-Não use "Iniciar" num pedido "Sem coletor" na tela de Pedidos do gestor (ver
-[Limitações](#limitações-e-próximos-passos)).
+O itens por hora do coletor da demonstração aparece como "—" nos primeiros
+10 minutos de coleta: é a regra do tempo mínimo, não um erro.
 
 ## API
 
@@ -258,6 +260,7 @@ cabeçalho `Authorization: Bearer <token>`.
 | `GET /settings` | todos | configurações do armazém e tamanho da planta |
 | `PUT /settings` | gestor | salvar configurações |
 | `GET /orders`, `POST /orders` | gestor | listar e criar pedidos |
+| `PATCH /orders/{id}` | gestor | atribuir, trocar ou remover (`null`) o coletor de um pedido pendente |
 | `GET /orders/{id}/route` | gestor e coletor dono | rota de coleta com o traçado de cada trecho |
 | `POST /orders/{id}/start`, `/complete` | gestor e coletor dono | iniciar e concluir (só com tudo coletado) |
 | `POST /orders/{id}/cancel` | gestor | cancelar |
@@ -270,8 +273,9 @@ cabeçalho `Authorization: Bearer <token>`.
 | `POST /scan-events` | coletor | registrar uma bipagem |
 | `POST /picker/status` | coletor | ficar ativo, em pausa ou offline |
 
-Transição de status inválida responde 409. Bipagem com código errado grava a
-divergência e responde 422. A coleção do Postman para corredores e posições
+Transição de status inválida responde 409, inclusive trocar o coletor de um
+pedido já iniciado. O gestor iniciar um pedido sem coletor responde 422.
+Bipagem com código errado grava a divergência e responde 422. A coleção do Postman para corredores e posições
 fica em `backend/postman/`.
 
 ## Configuração
@@ -296,3 +300,17 @@ Os testes cobrem a rota de coleta (ordem, travessas, empilhadeira, traçado),
 o ciclo do pedido, a bipagem, as métricas, os relatórios, as configurações e
 os usuários. Rodam com SQLite em memória e não tocam no banco local.
 
+## Limitações e próximos passos
+
+- **Configurações:** doca, limites da empilhadeira, máximo de itens por rota e
+  agrupamento de pedidos ficam salvos, mas ainda não mudam o cálculo da rota.
+- **Cadastro do armazém:** corredores, posições e produtos só podem ser criados
+  de dentro do Novo pedido; ainda não há tela para editar ou excluir (a API já
+  permite).
+- **Estoque:** o banco não guarda quantidade por posição. No Mapa, "ocupada"
+  quer dizer "tem produto cadastrado".
+- **Planilha do relatório:** traz só a série por dia (ou por hora); os itens por
+  hora de cada coletor e as ocorrências de bipagem ficam no PDF.
+- **Ainda desabilitados:** "Ver no mapa", "Ver histórico" e "Enviar mensagem" na
+  tela de Coletores; Notificações e Dispositivos em Configurações; "Esqueci
+  minha senha" no login.
